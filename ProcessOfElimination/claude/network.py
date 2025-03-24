@@ -87,7 +87,8 @@ class HangmanServer:
         message = {
             "type": "game_state",
             "data": {
-                "word": game_state["display_word"],
+                "actual_word": game_state["word"],
+                "display_word": game_state["display_word"],
                 "guessed_letters": game_state["guessed_letters"],
                 "incorrect_guesses": game_state["incorrect_guesses"],
                 "max_incorrect": game_state["max_incorrect"],
@@ -98,7 +99,6 @@ class HangmanServer:
         data = json.dumps(message).encode('utf-8')
         
         if client:
-            # Send to specific client
             try:
                 client.send(data)
             except Exception as e:
@@ -190,6 +190,7 @@ class HangmanClient:
             from logic import GameState
             
             # Update guessed letters
+            self.game.word = data["actual_word"]
             self.game.guessed_letters = set(data["guessed_letters"])
             self.game.incorrect_guesses = data["incorrect_guesses"]
             self.game.state = GameState(data["state"])

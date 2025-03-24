@@ -138,6 +138,7 @@ class HangmanUI:
                 self.guess_button.config(state=tk.DISABLED)
             if self.is_host and self.network:
                 self.start_button.config(state=tk.NORMAL)
+            self.root.after(2000, self.exit_game)
         elif game_state["state"] == GameState.LOST:
             self.status_message.config(text="You lost! The word was: " + game_state["word"])
             if not self.is_host and hasattr(self, "letter_entry"):
@@ -145,6 +146,7 @@ class HangmanUI:
                 self.guess_button.config(state=tk.DISABLED)
             if self.is_host and self.network:
                 self.start_button.config(state=tk.NORMAL)
+            self.root.after(2000, self.exit_game)
     
     def make_guess(self):
         letter = self.letter_entry.get().strip()
@@ -172,3 +174,8 @@ class HangmanUI:
             self.game.start_game()
             self.update_display()
 
+
+    def exit_game(self):
+        if self.network:
+            self.network.stop()
+        self.root.destroy()
