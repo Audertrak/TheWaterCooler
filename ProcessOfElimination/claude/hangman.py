@@ -13,6 +13,16 @@ def get_local_ip():
 def start_host():
     root = tk.Tk()
     game = HangmanGame()
+
+    custom_word = tk.simpledialog.askstring(
+            "Custom Word", "Enter a word (letters only):", parent=root
+    )
+    if not custom_word or not custom_word.isalpha():
+        tk.messagebox.showerror("Error", "Invalid word: please try again")
+        root.destroy()
+        return
+
+    game.set_word(custom_word)
     
     # Create UI first without network
     ui = HangmanUI(root, game, is_host=True)

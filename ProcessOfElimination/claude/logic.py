@@ -15,6 +15,12 @@ class HangmanGame:
             "monitor", "language", "software", "hardware", "developer"
         ]
         self.reset_game()
+
+    def set_word(self, word):
+        self.word = word.upper()
+        self.guessed_letters = set()
+        self.incorrect_guesses = 0
+        self.state = GameState.WAITING
     
     def reset_game(self):
         self.word = random.choice(self.words).upper()

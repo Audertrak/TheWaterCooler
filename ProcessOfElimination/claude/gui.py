@@ -9,9 +9,9 @@ class HangmanUI:
         self.network = network
         self.is_host = is_host
         
-        self.root.title("Hangman Game")
-        self.root.geometry("500x500")
-        self.root.resizable(False, False)
+        self.root.title("Process of Elimination")
+        self.root.geometry("800x600")
+        #self.root.resizable(False, False)
         
         self.setup_ui()
         self.update_display()
@@ -35,35 +35,44 @@ class HangmanUI:
         
         self.guessed_display = tk.Label(self.game_frame, text="", font=("Arial", 12))
         self.guessed_display.grid(row=3, column=0, pady=5)
-        
-        # Letter input
-        self.input_frame = tk.Frame(self.game_frame)
-        self.input_frame.grid(row=4, column=0, pady=20)
-        
-        self.letter_label = tk.Label(self.input_frame, text="Enter a letter:", font=("Arial", 12))
-        self.letter_label.grid(row=0, column=0, padx=5)
-        
-        self.letter_entry = tk.Entry(self.input_frame, width=5, font=("Arial", 12))
-        self.letter_entry.grid(row=0, column=1, padx=5)
-        
-        self.guess_button = tk.Button(self.input_frame, text="Guess", command=self.make_guess)
-        self.guess_button.grid(row=0, column=2, padx=5)
-        
+
+        # For players (clients), create controls for guessing
+        if not self.is_host:
+            self.input_frame = tk.Frame(self.game_frame)
+            self.input_frame.grid(row=4, column=0, pady=20)
+            
+            self.letter_label = tk.Label(
+                self.input_frame, text="Enter a letter:", font=("Arial", 12)
+            )
+            self.letter_label.grid(row=0, column=0, padx=5)
+            
+            self.letter_entry = tk.Entry(self.input_frame, width=5, font=("Arial", 12))
+            self.letter_entry.grid(row=0, column=1, padx=5)
+            
+            self.guess_button = tk.Button(
+                self.input_frame, text="Guess", command=self.make_guess
+            )
+            self.guess_button.grid(row=0, column=2, padx=5)
+            
+            # Bind Enter key to make_guess
+            self.letter_entry.bind("<Return>", lambda event: self.make_guess())
+    
         # Status message
-        self.status_message = tk.Label(self.game_frame, text="", font=("Arial", 12))
+        self.status_message = tk.Label(
+            self.game_frame, text="", font=("Arial", 12)
+        )
         self.status_message.grid(row=5, column=0, pady=10)
         
-        # Create buttons for host/client actions
-        self.control_frame = tk.Frame(self.game_frame)
-        self.control_frame.grid(row=6, column=0, pady=10)
-        
+        # Create buttons for host actions (only for host)
         if self.is_host:
-            self.start_button = tk.Button(self.control_frame, text="Start New Game", command=self.start_new_game)
+            self.control_frame = tk.Frame(self.game_frame)
+            self.control_frame.grid(row=6, column=0, pady=10)
+            
+            self.start_button = tk.Button(
+                self.control_frame, text="Start New Game", command=self.start_new_game
+            )
             self.start_button.grid(row=0, column=0, padx=5)
-        
-        # Bind Enter key to make_guess
-        self.letter_entry.bind("<Return>", lambda event: self.make_guess())
-    
+
     def draw_hangman(self, incorrect_guesses):
         self.hangman_canvas.delete("all")
         
@@ -114,22 +123,26 @@ class HangmanUI:
         # Update status message
         if game_state["state"] == GameState.WAITING:
             self.status_message.config(text="Waiting to start...")
-            self.letter_entry.config(state=tk.DISABLED)
-            self.guess_button.config(state=tk.DISABLED)
+            if not self.is_host and hasattr(self, "letter_entry"):
+                self.letter_entry.config(state=tk.DISABLED)
+                self.guess_button.config(state=tk.DISABLED)
         elif game_state["state"] == GameState.PLAYING:
             self.status_message.config(text=f"Incorrect guesses: {game_state['incorrect_guesses']}/{game_state['max_incorrect']}")
-            self.letter_entry.config(state=tk.NORMAL)
-            self.guess_button.config(state=tk.NORMAL)
+            if not self.is_host and hasattr(self, "letter_entry"):
+                self.letter_entry.config(state=tk.NORMAL)
+                self.guess_button.config(state=tk.NORMAL)
         elif game_state["state"] == GameState.WON:
             self.status_message.config(text="You won! The word was: " + game_state["word"])
-            self.letter_entry.config(state=tk.DISABLED)
-            self.guess_button.config(state=tk.DISABLED)
+            if not self.is_host and hasattr(self, "letter_entry"):
+                self.letter_entry.config(state=tk.DISABLED)
+                self.guess_button.config(state=tk.DISABLED)
             if self.is_host and self.network:
                 self.start_button.config(state=tk.NORMAL)
         elif game_state["state"] == GameState.LOST:
             self.status_message.config(text="You lost! The word was: " + game_state["word"])
-            self.letter_entry.config(state=tk.DISABLED)
-            self.guess_button.config(state=tk.DISABLED)
+            if not self.is_host and hasattr(self, "letter_entry"):
+                self.letter_entry.config(state=tk.DISABLED)
+                self.guess_button.config(state=tk.DISABLED)
             if self.is_host and self.network:
                 self.start_button.config(state=tk.NORMAL)
     

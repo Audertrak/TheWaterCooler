@@ -187,7 +187,7 @@ class HangmanClient:
             data = message["data"]
             
             # Update game state based on server data
-            from hangman_logic import GameState
+            from logic import GameState
             
             # Update guessed letters
             self.game.guessed_letters = set(data["guessed_letters"])
