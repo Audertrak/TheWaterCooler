@@ -1,3 +1,5 @@
+#TODO: investigate windows-curses and textual as alternatives to msvcrt
+
 import os
 import time
 import sys
