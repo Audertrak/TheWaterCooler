@@ -59,8 +59,8 @@ class PoE_Server:
         self.clients = []
 
         # service constants
-        self.SERVICE_TYPE = "_processOfElimination._tcp.local."
-        self.SERVICE_NAME = f"ProcessOfElimination_{socket.gethostname()}_{self.port}"
+        self.SERVICE_TYPE = "_poe._tcp.local."
+        self.SERVICE_NAME = f"POE_{socket.gethostname()}_{self.port}"
         self.UDP_DISCOVERY_PORT = 5556
     
     def start(self):
@@ -104,7 +104,8 @@ class PoE_Server:
             addresses = [socket.inet_aton(ip_addr)]
             properties = {
                 'version': '1.0',
-                'hostname': socket.gethostname()
+                'hostname': socket.gethostname(),
+                'app': 'ProcessOfElimination'
             }
 
             self.service_info = ServiceInfo(
@@ -339,7 +340,7 @@ class PoE_Client:
         self.discovered_servers = []
         
         # Service constants
-        self.SERVICE_TYPE = "_processOfElimination._tcp.local."
+        self.SERVICE_TYPE = "_poe._tcp.local."
         self.UDP_DISCOVERY_PORT = 5556
     
     def connect(self):
