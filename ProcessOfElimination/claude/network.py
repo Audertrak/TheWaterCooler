@@ -31,9 +31,9 @@ class DiscoveryListener(ServiceListener):
         if name in self.services:
             del self.services[name]
 
-class HangmanServer:
-    def __init__(self, game, ui, host='0.0.0.0', port=5555):
-        self.game = game
+class PoE_Server:
+    def __init__(self, meeting, ui, host='0.0.0.0', port=5555):
+        self.meeting = meeting
         self.ui = ui
         self.host = host
         self.port = port if port else random.randint(49152, 65535)
@@ -201,8 +201,8 @@ class HangmanServer:
                 thread.daemon = True
                 thread.start()
                 
-                # Send current game state to new client
-                self.send_game_state(client)
+                # Send current meeting state to new client
+                self.send_meeting_state(client)
             except Exception as e:
                 if self.running:
                     print(f"Error accepting connection: {e}")
@@ -228,23 +228,23 @@ class HangmanServer:
     def process_message(self, message):
         if message["type"] == "guess":
             letter = message["letter"]
-            self.game.guess_letter(letter)
+            self.meeting.propose_solution(letter)
             
             # Update UI and broadcast new state
             self.ui.update_display()
-            self.broadcast_game_state()
+            self.broadcast_meeting_state()
     
-    def send_game_state(self, client=None):
-        game_state = self.game.get_game_state()
+    def send_meeting_state(self, client=None):
+        meeting_state = self.meeting.get_meeting_state()
         message = {
-            "type": "game_state",
+            "type": "meeting_state",
             "data": {
-                "actual_word": game_state["word"],
-                "display_word": game_state["display_word"],
-                "guessed_letters": game_state["guessed_letters"],
-                "incorrect_guesses": game_state["incorrect_guesses"],
-                "max_incorrect": game_state["max_incorrect"],
-                "state": game_state["state"].value
+                "actual_word": meeting_state["word"],
+                "display_word": meeting_state["display_word"],
+                "guessed_letters": meeting_state["guessed_letters"],
+                "incorrect_guesses": meeting_state["incorrect_guesses"],
+                "max_incorrect": meeting_state["max_incorrect"],
+                "state": meeting_state["state"].value
             }
         }
         
@@ -261,8 +261,8 @@ class HangmanServer:
             # Broadcast to all clients
             self.broadcast(data)
     
-    def broadcast_game_state(self):
-        self.send_game_state()
+    def broadcast_meeting_state(self):
+        self.send_meeting_state()
     
     def broadcast(self, message):
         disconnected_clients = []
@@ -279,11 +279,11 @@ class HangmanServer:
             if client in self.clients:
                 self.clients.remove(client)
     
-    def start_new_game(self):
-        self.game.reset_game()
-        self.game.start_game()
+    def start_new_meeting(self):
+        self.meeting.reset_meeting()
+        self.meeting.start_meeting()
         self.ui.update_display()
-        self.broadcast_game_state()
+        self.broadcast_meeting_state()
     
     def stop(self):
         self.running = False
@@ -312,9 +312,9 @@ class HangmanServer:
             except:
                 pass
 
-class HangmanClient:
-    def __init__(self, game, ui, host=None, port=5555):
-        self.game = game
+class PoE_Client:
+    def __init__(self, meeting, ui, host=None, port=5555):
+        self.meeting = meeting
         self.ui = ui
         self.host = host
         self.port = port
@@ -479,22 +479,22 @@ class HangmanClient:
         self.disconnect()
     
     def process_message(self, message):
-        if message["type"] == "game_state":
+        if message["type"] == "meeting_state":
             data = message["data"]
             
-            # Update game state based on server data
-            from logic import GameState
+            # Update meeting state based on server data
+            from logic import Transcript
             
             # Update guessed letters
-            self.game.word = data["actual_word"]
-            self.game.guessed_letters = set(data["guessed_letters"])
-            self.game.incorrect_guesses = data["incorrect_guesses"]
-            self.game.state = GameState(data["state"])
+            self.meeting.word = data["actual_word"]
+            self.meeting.guessed_letters = set(data["guessed_letters"])
+            self.meeting.incorrect_guesses = data["incorrect_guesses"]
+            self.meeting.state = Transcript(data["state"])
             
             # Update UI
             self.ui.root.after(0, self.ui.update_display)
     
-    def send_guess(self, letter):
+    def propose_solution(self, letter):
         message = {
             "type": "guess",
             "letter": letter

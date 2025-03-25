@@ -1,9 +1,9 @@
 import tkinter as tk
 from tkinter import simpledialog, messagebox
 import socket
-from logic import HangmanGame
-from gui import HangmanUI
-from network import HangmanServer, HangmanClient
+from logic import PoE_Meeting
+from gui import PoE_UI
+from network import PoE_Server, PoE_Client
 
 def get_local_ip():
     hostname = socket.gethostname()
@@ -12,7 +12,7 @@ def get_local_ip():
 
 def start_host():
     root = tk.Tk()
-    game = HangmanGame()
+    meeting = PoE_Meeting()
 
     custom_word = tk.simpledialog.askstring(
             "Custom Word", "Enter a word (letters only):", parent=root
@@ -22,21 +22,21 @@ def start_host():
         root.destroy()
         return
 
-    game.set_word(custom_word)
+    meeting.pose_problem(custom_word)
     
     # Create UI first without network
-    ui = HangmanUI(root, game, is_host=True)
+    ui = PoE_UI(root, meeting, is_host=True)
     
     # Create server with UI reference
-    server = HangmanServer(game, ui)
+    server = PoE_Server(meeting, ui)
     success = server.start()
     
     if success:
         # Update UI with server reference
         ui.network = server
         
-        # Start the game
-        game.start_game()
+        # Start the meeting
+        meeting.start_meeting()
         ui.update_display()
         
         # Show server IP address
@@ -57,13 +57,13 @@ def start_client():
         return
     
     root = tk.Tk()
-    game = HangmanGame()
+    meeting = PoE_Meeting()
     
     # Create UI
-    ui = HangmanUI(root, game, is_host=False)
+    ui = PoE_UI(root, meeting, is_host=False)
     
     # Create client
-    client = HangmanClient(game, ui, server_ip)
+    client = PoE_Client(meeting, ui, server_ip)
     success = client.connect()
     
     if success:
@@ -84,17 +84,17 @@ def on_close(root, network):
 def main():
     # Create selection window
     root = tk.Tk()
-    root.title("Hangman Game")
+    root.title("PoE_ meeting")
     root.geometry("300x200")
     root.resizable(False, False)
     
     label = tk.Label(root, text="Choose an option:", font=("Arial", 14))
     label.pack(pady=20)
     
-    host_button = tk.Button(root, text="Host Game", width=20, command=lambda: [root.destroy(), start_host()])
+    host_button = tk.Button(root, text="Host meeting", width=20, command=lambda: [root.destroy(), start_host()])
     host_button.pack(pady=10)
     
-    join_button = tk.Button(root, text="Join Game", width=20, command=lambda: [root.destroy(), start_client()])
+    join_button = tk.Button(root, text="Join meeting", width=20, command=lambda: [root.destroy(), start_client()])
     join_button.pack(pady=10)
     
     root.mainloop()
