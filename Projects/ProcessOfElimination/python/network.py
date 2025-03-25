@@ -3,6 +3,10 @@ import threading
 import json
 import time
 import random
+import subprocess
+import webbrowser
+import os
+from urllib.parse import quote
 
 try:
     from zeroconf import Zeroconf, ServiceInfo, ServiceBrowser, ServiceListener
@@ -38,11 +42,20 @@ if ZEROCONF_AVAILABLE:
                 del self.services[name]
 
 class PoE_Server:
-    def __init__(self, meeting, ui, host='0.0.0.0', port=5555):
+    def __init__(self, meeting, ui, host='0.0.0.0', port=None):
         self.meeting = meeting
         self.ui = ui
         self.host = host
-        self.port = port if port else random.randint(49152, 65535)
+
+        # try commonly available ports
+        self.port = port if port else self.find_available_port([
+            8080,  # Common HTTP alternate
+            80,    # HTTP - often open
+            443,   # HTTPS - often open 
+            5000,  # Common development port
+            5555,  # Original port
+            random.randint(49152, 65535)  # Random high port as last resort
+        ])
 
         # TCP socket for server
         self.server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -62,6 +75,75 @@ class PoE_Server:
         self.SERVICE_TYPE = "_poe._tcp.local."
         self.SERVICE_NAME = f"POE_{socket.gethostname()}_{self.port}"
         self.UDP_DISCOVERY_PORT = 5556
+
+    def find_available_port(self, port_list):
+        """Try each port in the list and return the first available one"""
+        for port in port_list:
+            temp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            temp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                temp_socket.bind((self.host, port))
+                temp_socket.close()
+                return port
+            except:
+                temp_socket.close()
+                continue
+        return 5555  # Default fallback
+    
+    # Add this method to help with connection sharing
+    def show_connection_info(self):
+        """Display connection info and provide easy sharing options"""
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        
+        try:
+            # Try to get the external IP address (will only work if we have internet access)
+            external_ip = None
+            try:
+                import urllib.request
+                external_ip = urllib.request.urlopen('https://api.ipify.org').read().decode('utf-8')
+            except:
+                pass
+                
+            # Create a message with connection details
+            message = f"\n=== CONNECTION INFORMATION ===\n"
+            message += f"Local IP: {local_ip}\n"
+            message += f"Port: {self.port}\n"
+            
+            if external_ip:
+                message += f"External IP: {external_ip} (only works outside your network)\n"
+                
+            message += "\nShare this information with others who want to join.\n"
+            message += "They should use the Local IP if they're on the same network.\n"
+            
+            # Add easy share options
+            share_text = f"Join my Process of Elimination meeting at {local_ip}:{self.port}"
+            message += f"\nShare options:\n"
+            
+            # Generate a QR code command if qrcode is available
+            try:
+                import qrcode
+                img = qrcode.make(share_text)
+                qr_path = "poe_connect.png"
+                img.save(qr_path)
+                message += f"- QR Code saved to: {qr_path}\n"
+            except ImportError:
+                message += "- Install 'qrcode' package for QR code sharing\n"
+            
+            # Email sharing
+            email_link = f"mailto:?subject=Process%20of%20Elimination%20Meeting&body={quote(share_text)}"
+            message += f"- Email: {email_link}\n"
+            
+            print(message)
+            
+            # Offer to open browser with the instructions
+            if self.ui and hasattr(self.ui, "show_message"):
+                self.ui.show_message("Connection Information", message)
+                
+        except Exception as e:
+            print(f"Error generating connection info: {e}")
+        
+
     
     def start(self):
         try:
@@ -86,11 +168,51 @@ class PoE_Server:
             thread = threading.Thread(target=self.accept_connections)
             thread.daemon = True
             thread.start()
+
+            # After server start is successful:
+            self.show_connection_info()
+            
+            # Consider opening firewall ports if we have admin access
+            self.try_open_firewall_port()
             
             return True
         except Exception as e:
             print(f"Error starting server: {e}")
             return False
+        
+    def try_open_firewall_port(self):
+        """Attempt to open the firewall port if possible"""
+        try:
+            if os.name == 'nt':  # Windows
+                # Check if we're running with admin privileges
+                admin = False
+                try:
+                    admin = ctypes.windll.shell32.IsUserAnAdmin() != 0
+                except:
+                    pass
+                
+                if admin:
+                    # Try to add firewall rule using netsh
+                    app_path = sys.executable  # Python interpreter path
+                    rule_name = f"ProcessOfElimination_{self.port}"
+                    
+                    # Delete any existing rule with this name
+                    subprocess.run(
+                        f'netsh advfirewall firewall delete rule name="{rule_name}"',
+                        shell=True, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL
+                    )
+                    
+                    # Add new rule
+                    subprocess.run(
+                        f'netsh advfirewall firewall add rule name="{rule_name}" dir=in action=allow protocol=TCP localport={self.port} program="{app_path}" enable=yes',
+                        shell=True
+                    )
+                    print(f"Added firewall rule for port {self.port}")
+                else:
+                    print("Not running as administrator - firewall rule not added")
+            
+        except Exception as e:
+            print(f"Could not configure firewall: {e}")
 
     def start_zeroconf(self):
         """Start zeroconf service discovery"""
@@ -346,9 +468,19 @@ class PoE_Client:
     def connect(self):
         """Connect with automatic server discovery"""
         if self.host:
-            # If host is provided, try direct connection first
-            if self.connect_direct(self.host, self.port):
-                return True
+            if ":" in self.host:
+                host_parts = self.host.split(":")
+                if len(host_parts) == 2 and host_parts[1].isdigit():
+                    self.host = host_parts[0]
+                    self.port = int(host_parts[1])
+
+                if self.connect_direct(self.host, self.port):
+                    return True
+                
+                common_ports = [80, 443, 8080, 5000, 5555]
+                for port in common_ports:
+                    if port != self.port and self.connect_direct(self.host, port):
+                        return True
         
         # Try discovery methods in order
         if self.discover_via_zeroconf():
