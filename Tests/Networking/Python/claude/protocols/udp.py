@@ -3,7 +3,8 @@ import json
 import time
 from typing import Callable, Dict, Tuple, Optional
 
-from .base import ProtocolBase
+from protocols.base import ProtocolBase
+from peer import PeerManager
 
 from message.base import MessageBase
 from message.json import JSONMessage
@@ -14,8 +15,9 @@ from message.raw import RawMessage
 class UDPProtocol(ProtocolBase):
     def __init__(self, peer_id: str, on_peer_discovered: Callable, on_message: Callable,
              port: int = 5555, broadcast_interval: int = 5, 
-             message_format: Optional[MessageBase] = None):
-        super().__init__(peer_id, on_peer_discovered, on_message)
+             message_format: Optional[MessageBase] = None,
+             peer_manager: Optional[PeerManager] = None):
+        super().__init__(peer_id, on_peer_discovered, on_message, peer_manager)
         self.port = port
         self.broadcast_interval = broadcast_interval
         self.socket = None
@@ -88,26 +90,36 @@ class UDPProtocol(ProtocolBase):
                     return
                     
                 if message_type == "discovery":
-                    # Handle peer discovery
-                    if peer_id not in self.peers:
-                        self.peers[peer_id] = {"ip": sender_ip, "port": self.port}
-                        self.log(f"Discovered peer: {peer_id} at {sender_ip}")
-                        self.on_peer_discovered(peer_id, "udp")
-                        
-                        # Send a response to acknowledge
-                        self._send_discovery_response(sender_ip)
-                        
+                    # Handle peer discovery using PeerManager
+                    peer = self.peer_manager.add_or_update_peer(
+                        peer_id, 
+                        "udp",
+                        ip=sender_ip,
+                        port=self.port
+                    )
+                    self.log(f"Discovered peer: {peer_id} at {sender_ip}")
+                    self.on_peer_discovered(peer_id, "udp")
+                    
+                    # Send a response to acknowledge
+                    self._send_discovery_response(sender_ip)
+                    
                 elif message_type == "discovery_response":
-                    # Handle discovery response
-                    if peer_id not in self.peers:
-                        self.peers[peer_id] = {"ip": sender_ip, "port": self.port}
-                        self.log(f"Received discovery response from: {peer_id}")
-                        self.on_peer_discovered(peer_id, "udp")
-                        
+                    # Handle discovery response using PeerManager
+                    peer = self.peer_manager.add_or_update_peer(
+                        peer_id,
+                        "udp", 
+                        ip=sender_ip,
+                        port=self.port
+                    )
+                    self.log(f"Received discovery response from: {peer_id}")
+                    self.on_peer_discovered(peer_id, "udp")
+                    
                 elif message_type == "message":
-                    # Handle normal message
-                    self.log(f"Received message from {peer_id}: {content}")
-                    self.on_message(peer_id, content, "udp")
+                    # Handle normal message using PeerManager
+                    if peer := self.peer_manager.get_peer(peer_id):
+                        self.peer_manager.add_message(peer_id, content, "udp", outgoing=False)
+                        self.log(f"Received message from {peer_id}: {content}")
+                        self.on_message(peer_id, content, "udp")
                     
         except Exception as e:
             self.log(f"Error handling message: {str(e)}")
@@ -129,10 +141,14 @@ class UDPProtocol(ProtocolBase):
 
     def _send_message_impl(self, peer_id: str, message: str) -> bool:
         """Send a message to a specific peer"""
-        if not self.socket or peer_id not in self.peers:
+        if not self.socket:
             return False
             
-        peer_info = self.peers[peer_id]
+        peer = self.peer_manager.get_peer(peer_id)
+        if not peer or not peer.is_active("udp"):
+            return False
+            
+        peer_info = peer.get_protocol_info("udp")
         msg_obj = self.message_format.create_message(
             self.peer_id,
             message,
@@ -143,6 +159,7 @@ class UDPProtocol(ProtocolBase):
         try:
             data = self.message_format.serialize(msg_obj)
             self.socket.sendto(data, (peer_info["ip"], peer_info["port"]))
+            self.peer_manager.add_message(peer_id, message, "udp", outgoing=True)
             self.log(f"Sent message to {peer_id}")
             return True
         except Exception as e:

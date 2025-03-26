@@ -1,16 +1,23 @@
 import tkinter as tk
 from tkinter import ttk, scrolledtext
+
 import socket
 import uuid
 import threading
 import time
+import json
+
+from pathlib import Path
 from typing import Dict, List
+
+from peer import *
+from identity import PeerIdentity, IdentityDialog
 
 from protocols.base import ProtocolBase
 from protocols.udp import UDPProtocol
 from protocols.tcp import TCPProtocol
 from protocols.mdns import MDNSProtocol
-
+from protocols.winapi import WindowsProtocol
 
 from message.base import MessageBase
 from message.raw import RawMessage
@@ -19,15 +26,20 @@ from message.protobuf import SimpleProtobufMessage
 from message.mqtt import MQTTMessage
 
 class P2PTesterGUI:
-    def __init__(self, root):
+    def __init__(self, root, peer_manager=None):
         self.root = root
         self.root.title("P2P Network Tester")
-        self.root.geometry("1000x700")
+        self.root.geometry("1080x800")
         
         self.peer_id = f"peer-{uuid.uuid4().hex[:8]}"
+        self.identity = PeerIdentity(display_name=socket.gethostname())
+        self.peer_id = self.identity.peer_id
+        
+        # Create PeerManager instance
+        self.peer_manager = peer_manager or PeerManager()
+        
         self.protocols: Dict[str, ProtocolBase] = {}
         self.active_protocols = set()
-        self.peers = {}  # {peer_id: {protocol: protocol_name}}
         
         # Initialize message formats
         self.message_formats = {
@@ -79,6 +91,11 @@ class P2PTesterGUI:
         mdns_tab = ttk.Frame(self.protocol_notebook)
         self.protocol_notebook.add(mdns_tab, text="mDNS")
         self._create_protocol_tab(mdns_tab, "mdns")
+
+        # Windows tab
+        windows_tab = ttk.Frame(self.protocol_notebook)
+        self.protocol_notebook.add(windows_tab, text="Windows")
+        self._create_protocol_tab(windows_tab, "windows")
         
         # Bottom frame for peers and messaging
         bottom_frame = ttk.Frame(self.root, padding=10)
@@ -128,7 +145,7 @@ class P2PTesterGUI:
         # Protocol selection for sending
         self.send_protocol_var = tk.StringVar(value="any")
         protocol_combo = ttk.Combobox(send_frame, textvariable=self.send_protocol_var,
-                                      values=["any", "udp", "tcp", "mdns"],
+                                      values=["any", "udp", "tcp", "mdns", "windows"],
                                       width=10)
         protocol_combo.pack(side=tk.LEFT, padx=5)
         
@@ -140,7 +157,7 @@ class P2PTesterGUI:
                                     values=list(self.message_formats.keys()),
                                     width=10)
         format_combo.pack(side=tk.LEFT, padx=5)
-        format_combo.bind("<<ComboboxSelected>>", lambda e: self._update_message_format())
+        format_combo.bind("<<ComboboxSelected>>", lambda e: self._change_message_format())
 
         self.send_btn = ttk.Button(send_frame, text="Send", 
                                   command=self._send_message,
@@ -156,6 +173,11 @@ class P2PTesterGUI:
         status_bar = ttk.Label(self.root, textvariable=self.status_var, 
                               relief=tk.SUNKEN, anchor=tk.W)
         status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        # identity management button
+        identity_btn = ttk.Button(top_frame, text="Manage Identity",
+                                command=self._show_identity_dialog)
+        identity_btn.pack(side=tk.LEFT, padx=5)
         
         # Bind window close event
         self.root.protocol("WM_DELETE_WINDOW", self._on_closing)
@@ -187,28 +209,37 @@ class P2PTesterGUI:
         
         
     def _init_protocols(self):
-        # Initialize protocols with default settings
-        default_format = self.message_formats[self.current_message_format]
-
         """Initialize protocol handlers"""
+        default_format = self.message_formats[self.current_message_format]
+        
         self.protocols = {
             "udp": UDPProtocol(
                 self.peer_id,
-                lambda peer_id, protocol: self._on_peer_discovered(peer_id, protocol),
-                lambda peer_id, message, protocol: self._on_message_received(peer_id, message, protocol),
-                message_format=default_format
+                self._on_peer_discovered,
+                self._on_message_received,
+                message_format=default_format,
+                peer_manager=self.peer_manager
             ),
             "tcp": TCPProtocol(
                 self.peer_id,
-                lambda peer_id, protocol: self._on_peer_discovered(peer_id, protocol),
-                lambda peer_id, message, protocol: self._on_message_received(peer_id, message, protocol),
-                message_format=default_format
+                self._on_peer_discovered,
+                self._on_message_received, 
+                message_format=default_format,
+                peer_manager=self.peer_manager
             ),
             "mdns": MDNSProtocol(
                 self.peer_id,
-                lambda peer_id, protocol: self._on_peer_discovered(peer_id, protocol),
-                lambda peer_id, message, protocol: self._on_message_received(peer_id, message, protocol),
-                message_format=default_format
+                self._on_peer_discovered,
+                self._on_message_received,
+                message_format=default_format,
+                peer_manager=self.peer_manager
+            ),
+            "windows": WindowsProtocol(
+                self.peer_id,
+                self._on_peer_discovered,
+                self._on_message_received,
+                message_format=default_format,
+                peer_manager=self.peer_manager
             )
         }
 
@@ -279,22 +310,35 @@ class P2PTesterGUI:
                 
         self.status_var.set(f"Peer ID updated from {old_id} to {new_id}")
     
-    def _on_peer_discovered(self, peer_id, protocol):
+    def _on_peer_discovered(self, peer_id: str, protocol: str):
         """Callback when a peer is discovered"""
-        if peer_id not in self.peers:
-            self.peers[peer_id] = {protocol}
-            self.peers_list.insert(tk.END, f"{peer_id} ({protocol})")
-        else:
-            self.peers[peer_id].add(protocol)
-            # Update the display
+        peer = self.peer_manager.get_peer(peer_id)
+        if peer:
+            # Store current selection
+            current_selection = self.peers_list.curselection()
+            selected_peer = self.peers_list.get(current_selection[0]) if current_selection else None
+            
+            # Update peers list display
+            protocols = ", ".join(peer.get_active_protocols())
+            
+            # Check if peer is already in list
             for i in range(self.peers_list.size()):
                 if self.peers_list.get(i).startswith(peer_id):
-                    protocols = ", ".join(self.peers[peer_id])
                     self.peers_list.delete(i)
                     self.peers_list.insert(i, f"{peer_id} ({protocols})")
                     break
-    
-    def _on_message_received(self, peer_id, message, protocol):
+            else:
+                # Add new peer to list
+                self.peers_list.insert(tk.END, f"{peer_id} ({protocols})")
+                
+            # Restore selection if the previously selected peer is still in the list
+            if selected_peer:
+                for i in range(self.peers_list.size()):
+                    if self.peers_list.get(i) == selected_peer:
+                        self.peers_list.selection_set(i)
+                        break
+
+    def _on_message_received(self, peer_id: str, message: str, protocol: str):
         """Callback when a message is received"""
         self.message_history.config(state='normal')
         timestamp = time.strftime("%H:%M:%S")
@@ -332,45 +376,19 @@ class P2PTesterGUI:
         peer_id = peer_entry.split(" ")[0]  # Extract peer ID
         
         protocol_choice = self.send_protocol_var.get()
+        peer = self.peer_manager.get_peer(peer_id)
         
-        if protocol_choice == "any":
-            # Try each protocol the peer is available on
-            peer_protocols = self.peers.get(peer_id, set())
-            for protocol_name in peer_protocols:
-                if protocol_name in self.active_protocols:
-                    protocol = self.protocols.get(protocol_name)
-                    if protocol and protocol.send_message(peer_id, message):
-                        # Add to message history
-                        self.message_history.config(state='normal')
-                        timestamp = time.strftime("%H:%M:%S")
-                        self.message_history.insert(tk.END, 
-                                                  f"[{timestamp}] You ({protocol_name}): {message}\n")
-                        self.message_history.see(tk.END)
-                        self.message_history.config(state='disabled')
-                        
-                        self.message_var.set("")  # Clear message input
-                        return
-                        
-            self.status_var.set(f"Failed to send message to {peer_id} on any protocol")
-        else:
-            # Use the specified protocol
-            if protocol_choice in self.active_protocols:
-                protocol = self.protocols.get(protocol_choice)
-                if protocol and protocol.send_message(peer_id, message):
-                    # Add to message history
-                    self.message_history.config(state='normal')
-                    timestamp = time.strftime("%H:%M:%S")
-                    self.message_history.insert(tk.END, 
-                                              f"[{timestamp}] You ({protocol_choice}): {message}\n")
-                    self.message_history.see(tk.END)
-                    self.message_history.config(state='disabled')
-                    
-                    self.message_var.set("")  # Clear message input
-                else:
-                    self.status_var.set(f"Failed to send message using {protocol_choice} protocol")
-            else:
-                self.status_var.set(f"Protocol {protocol_choice} is not active")
-    
+        if not peer:
+            self.log(f"DEBUG: Peer {peer_id} not found in peer manager")
+            self.log(f"DEBUG: Known peers: {list(self.peer_manager.get_all_peers().keys())}")
+            self.status_var.set(f"Unknown peer: {peer_id}")
+            return
+
+        self.log(f"DEBUG: Found peer {peer_id} in peer manager")
+        active_protocols = peer.get_active_protocols()
+        self.log(f"DEBUG: Peer protocols: {active_protocols}")
+        self.log(f"DEBUG: Our active protocols: {self.active_protocols}")
+
     def _broadcast_message(self):
         """Broadcast a message to all peers"""
         message = self.message_var.get().strip()
@@ -378,39 +396,53 @@ class P2PTesterGUI:
             return
             
         protocol_choice = self.send_protocol_var.get()
+        sent = False
         
         if protocol_choice == "any":
             # Try each active protocol
             for protocol_name in self.active_protocols:
                 protocol = self.protocols.get(protocol_name)
                 if protocol:
-                    protocol.broadcast_message(message)
-                    
-            # Add to message history
-            self.message_history.config(state='normal')
-            timestamp = time.strftime("%H:%M:%S")
-            self.message_history.insert(tk.END, 
-                                      f"[{timestamp}] You (broadcast): {message}\n")
-            self.message_history.see(tk.END)
-            self.message_history.config(state='disabled')
-            
-            self.message_var.set("")  # Clear message input
+                    try:
+                        protocol.broadcast_message(message)
+                        sent = True
+                    except Exception as e:
+                        self.log(f"Error broadcasting on {protocol_name}: {str(e)}")
+                        
+            if sent:
+                # Add to message history
+                self.message_history.config(state='normal')
+                timestamp = time.strftime("%H:%M:%S")
+                self.message_history.insert(tk.END, 
+                                        f"[{timestamp}] You (broadcast): {message}\n")
+                self.message_history.see(tk.END)
+                self.message_history.config(state='disabled')
+                
+                self.message_var.set("")  # Clear message input
+                self.status_var.set("Message broadcast successfully")
+            else:
+                self.status_var.set("Failed to broadcast message on any protocol")
+                
         else:
             # Use the specified protocol
             if protocol_choice in self.active_protocols:
                 protocol = self.protocols.get(protocol_choice)
                 if protocol:
-                    protocol.broadcast_message(message)
-                    
-                    # Add to message history
-                    self.message_history.config(state='normal')
-                    timestamp = time.strftime("%H:%M:%S")
-                    self.message_history.insert(tk.END, 
-                                              f"[{timestamp}] You ({protocol_choice} broadcast): {message}\n")
-                    self.message_history.see(tk.END)
-                    self.message_history.config(state='disabled')
-                    
-                    self.message_var.set("")  # Clear message input
+                    try:
+                        protocol.broadcast_message(message)
+                        
+                        # Add to message history
+                        self.message_history.config(state='normal')
+                        timestamp = time.strftime("%H:%M:%S")
+                        self.message_history.insert(tk.END, 
+                                                f"[{timestamp}] You ({protocol_choice} broadcast): {message}\n")
+                        self.message_history.see(tk.END)
+                        self.message_history.config(state='disabled')
+                        
+                        self.message_var.set("")  # Clear message input
+                        self.status_var.set(f"Message broadcast on {protocol_choice}")
+                    except Exception as e:
+                        self.status_var.set(f"Error broadcasting on {protocol_choice}: {str(e)}")
             else:
                 self.status_var.set(f"Protocol {protocol_choice} is not active")
     
@@ -424,16 +456,37 @@ class P2PTesterGUI:
             time.sleep(0.5)  # Update every half second
     
     def _update_protocol_logs(self):
-        """Update the protocol logs in the GUI"""
+        """Update the protocol logs in the GUI without disturbing selections"""
         for protocol_name, protocol in self.protocols.items():
             log_widget = getattr(self, f"{protocol_name}_log", None)
             if log_widget:
+                # Get current view position
+                current_view = log_widget.yview()
+                
+                # Store cursor position if widget has focus
+                has_focus = log_widget.focus_get() == log_widget
+                if has_focus:
+                    cursor_pos = log_widget.index(tk.INSERT)
+                
+                # Update content
                 log_widget.config(state='normal')
-                log_widget.delete('1.0', tk.END)
-                log_widget.insert(tk.END, "\n".join(protocol.log_messages))
-                log_widget.see(tk.END)
-                log_widget.config(state='disabled')
-    
+                current_text = log_widget.get('1.0', tk.END).strip()
+                new_text = "\n".join(protocol.log_messages)
+                
+                # Only update if content actually changed
+                if current_text != new_text:
+                    log_widget.delete('1.0', tk.END)
+                    log_widget.insert(tk.END, new_text)
+                    
+                    # Restore view position
+                    log_widget.yview_moveto(current_view[0])
+                    
+                    # Restore cursor if widget had focus
+                    if has_focus:
+                        log_widget.mark_set(tk.INSERT, cursor_pos)
+                
+                log_widget.config(state='disabled') 
+
     def _on_closing(self):
         """Handle window closing event"""
         # Stop all protocols
@@ -441,3 +494,24 @@ class P2PTesterGUI:
             protocol.stop()
             
         self.root.destroy()
+
+    def _show_identity_dialog(self):
+        dialog = IdentityDialog(self.root, self.identity, peer_manager=self.peer_manager)
+        self.root.wait_window(dialog)
+        if dialog.result:
+            self.identity = dialog.result
+            self.peer_id = self.identity.peer_id
+            self.peer_id_var.set(self.peer_id)
+            self._update_peer_id()
+            self.status_var.set(f"Identity updated: {self.identity.display_name}")
+
+    def log(self, message: str):
+        """Add a message to all protocol logs for debugging"""
+        for protocol_name in self.protocols:
+            log_widget = getattr(self, f"{protocol_name}_log", None)
+            if log_widget:
+                log_widget.config(state='normal')
+                timestamp = time.strftime("%H:%M:%S")
+                log_widget.insert(tk.END, f"[{timestamp}] {message}\n")
+                log_widget.see(tk.END)
+                log_widget.config(state='disabled')

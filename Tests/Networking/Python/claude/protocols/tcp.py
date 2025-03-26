@@ -2,8 +2,9 @@ import socket
 import json
 import threading
 import time
-from typing import Callable, Dict, List, Optional
-from .base import ProtocolBase
+from typing import Callable, Dict, List, Optional, Tuple
+from protocols.base import ProtocolBase
+from peer import PeerManager
 
 from message.base import MessageBase
 from message.json import JSONMessage
@@ -14,8 +15,9 @@ from message.raw import RawMessage
 class TCPProtocol(ProtocolBase):
     def __init__(self, peer_id: str, on_peer_discovered: Callable, on_message: Callable,
                 port: int = 5556, discovery_port: int = 5557, broadcast_interval: int = 5,
-                message_format: Optional[MessageBase] = None):
-        super().__init__(peer_id, on_peer_discovered, on_message)
+                message_format: Optional[MessageBase] = None,
+                peer_manager: Optional[PeerManager] = None):
+        super().__init__(peer_id, on_peer_discovered, on_message, peer_manager)
         self.port = port  # Port for direct communication
         self.discovery_port = discovery_port  # Port for peer discovery
         self.broadcast_interval = broadcast_interval
@@ -129,7 +131,7 @@ class TCPProtocol(ProtocolBase):
         except Exception as e:
             self.log(f"TCP broadcast error: {str(e)}")
     
-    def _handle_discovery(self, data: bytes, addr):
+    def _handle_discovery(self, data: bytes, addr: Tuple[str, int]):
         """Handle discovery message"""
         try:
             message = json.loads(data.decode())
@@ -144,21 +146,29 @@ class TCPProtocol(ProtocolBase):
                     return
                     
                 if message["type"] == "discovery":
-                    # Store the peer info for future direct connections
-                    if peer_id not in self.peers:
-                        self.peers[peer_id] = {"ip": sender_ip, "port": peer_port}
-                        self.log(f"Discovered TCP peer: {peer_id} at {sender_ip}:{peer_port}")
-                        self.on_peer_discovered(peer_id, "tcp")
-                        
-                        # Send a response
-                        self._send_discovery_response(sender_ip)
-                        
+                    # Use PeerManager to track the peer
+                    peer = self.peer_manager.add_or_update_peer(
+                        peer_id,
+                        "tcp",
+                        ip=sender_ip,
+                        port=peer_port
+                    )
+                    self.log(f"Discovered TCP peer: {peer_id} at {sender_ip}:{peer_port}")
+                    self.on_peer_discovered(peer_id, "tcp")
+                    
+                    # Send a response
+                    self._send_discovery_response(sender_ip)
+                    
                 elif message["type"] == "discovery_response":
-                    # Handle discovery response
-                    if peer_id not in self.peers:
-                        self.peers[peer_id] = {"ip": sender_ip, "port": peer_port}
-                        self.log(f"Received TCP discovery response from: {peer_id}")
-                        self.on_peer_discovered(peer_id, "tcp")
+                    # Use PeerManager to track the peer
+                    peer = self.peer_manager.add_or_update_peer(
+                        peer_id,
+                        "tcp",
+                        ip=sender_ip,
+                        port=peer_port
+                    )
+                    self.log(f"Received TCP discovery response from: {peer_id}")
+                    self.on_peer_discovered(peer_id, "tcp")
                     
         except Exception as e:
             self.log(f"Error handling discovery: {str(e)}")
@@ -182,9 +192,8 @@ class TCPProtocol(ProtocolBase):
     def _handle_client(self, client_socket, addr):
         """Handle a client connection"""
         try:
-            client_socket.settimeout(10.0)  # Set a timeout for operations
+            client_socket.settimeout(10.0)
             
-            # First message should be identification
             data = client_socket.recv(4096)
             if not data:
                 return
@@ -195,10 +204,17 @@ class TCPProtocol(ProtocolBase):
                 
             peer_id = message["peer_id"]
             
-            # Update peer info if necessary
-            self.peers[peer_id] = {"ip": addr[0], "port": self.port, "socket": client_socket}
+            # Update peer info using PeerManager
+            peer = self.peer_manager.add_or_update_peer(
+                peer_id,
+                "tcp",
+                ip=addr[0],
+                port=self.port,
+                socket=client_socket
+            )
             
             if message["type"] == "message" and "content" in message:
+                self.peer_manager.add_message(peer_id, message['content'], "tcp", outgoing=False)
                 self.log(f"Received TCP message from {peer_id}: {message['content']}")
                 self.on_message(peer_id, message['content'], "tcp")
                 
@@ -211,6 +227,7 @@ class TCPProtocol(ProtocolBase):
                         
                     message = json.loads(data.decode())
                     if message["type"] == "message" and "content" in message:
+                        self.peer_manager.add_message(peer_id, message['content'], "tcp", outgoing=False)
                         self.log(f"Received TCP message from {peer_id}: {message['content']}")
                         self.on_message(peer_id, message['content'], "tcp")
                 except socket.timeout:
@@ -220,26 +237,28 @@ class TCPProtocol(ProtocolBase):
                 except Exception as e:
                     self.log(f"Error receiving from {peer_id}: {str(e)}")
                     break
-                    
         except Exception as e:
             self.log(f"Client handler error: {str(e)}")
         finally:
             client_socket.close()
+            if peer_id:
+                self.peer_manager.mark_peer_inactive(peer_id, "tcp")
             
-            # Clean up thread
             current_thread_id = threading.get_ident()
             if current_thread_id in self.client_threads:
                 del self.client_threads[current_thread_id]
     
     def _send_message_impl(self, peer_id: str, message: str) -> bool:
         """Send a message to a specific peer"""
-        if peer_id not in self.peers:
+        peer = self.peer_manager.get_peer(peer_id)
+        if not peer or not peer.is_active("tcp"):
             return False
             
-        peer_info = self.peers[peer_id]
+        peer_info = peer.get_protocol_info("tcp")
         
         # Check if we already have an open socket
-        if "socket" in peer_info and peer_info["socket"]:
+        socket_obj = peer_info.get("socket")
+        if socket_obj:
             try:
                 data = {
                     "type": "message",
@@ -247,21 +266,21 @@ class TCPProtocol(ProtocolBase):
                     "content": message,
                     "protocol": "tcp"
                 }
-                peer_info["socket"].sendall(json.dumps(data).encode())
+                socket_obj.sendall(json.dumps(data).encode())
+                self.peer_manager.add_message(peer_id, message, "tcp", outgoing=True)
                 self.log(f"Sent TCP message to {peer_id} using existing connection")
                 return True
             except Exception as e:
                 self.log(f"Error sending on existing connection: {str(e)}")
-                # Connection may be closed, remove it
                 peer_info.pop("socket", None)
+                self.peer_manager.mark_peer_inactive(peer_id, "tcp")
         
         # Create a new connection if needed
         try:
             socket_obj = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            socket_obj.settimeout(5.0)  # 5 second connection timeout
+            socket_obj.settimeout(5.0)
             socket_obj.connect((peer_info["ip"], peer_info["port"]))
             
-            # Send the message
             data = {
                 "type": "message",
                 "peer_id": self.peer_id,
@@ -270,8 +289,12 @@ class TCPProtocol(ProtocolBase):
             }
             socket_obj.sendall(json.dumps(data).encode())
             
-            # Store the socket for future use
-            peer_info["socket"] = socket_obj
+            # Update peer info with new socket
+            self.peer_manager.add_or_update_peer(
+                peer_id,
+                "tcp",
+                socket=socket_obj
+            )
             
             # Start a thread to handle responses
             client_thread = threading.Thread(
@@ -283,11 +306,13 @@ class TCPProtocol(ProtocolBase):
             thread_id = id(client_thread)
             self.client_threads[thread_id] = client_thread
             
+            self.peer_manager.add_message(peer_id, message, "tcp", outgoing=True)
             self.log(f"Sent TCP message to {peer_id} using new connection")
             return True
             
         except Exception as e:
             self.log(f"Error sending TCP message: {str(e)}")
+            self.peer_manager.mark_peer_inactive(peer_id, "tcp")
             return False
     
     def _cleanup(self):

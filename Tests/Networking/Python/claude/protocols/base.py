@@ -3,15 +3,20 @@ import threading
 import time
 from typing import Callable, Dict, List, Optional, Any
 
+from peer import PeerManager
+
 
 class ProtocolBase(abc.ABC):
-    def __init__(self, peer_id: str, on_peer_discovered: Callable, on_message: Callable):
+    def __init__(self, peer_id: str, on_peer_discovered: Callable, on_message: Callable, 
+                 peer_manager=None, message_format=None, **kwargs):
         self.peer_id = peer_id
         self.on_peer_discovered = on_peer_discovered
         self.on_message = on_message
         self.running = False
         self.thread = None
-        self.peers = {}  # {peer_id: connection_info}
+        self.peer_manager = peer_manager
+        self.message_format = message_format
+        self.peers = {}
         self.log_messages = []
         
     def start(self):
