@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en" class="theme-modern"> <!-- Default theme -->
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logic Circuit Tech Tree</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      /* Default to Modern Theme Variables */
+      --theme-bg-main: #f8f9fa;
+      /* Light grayish off-white */
+      --theme-text-main: #212529;
+      /* Dark gray/black */
+      --theme-bg-card: #ffffff;
+      --theme-border-card: #dee2e6;
+      --theme-text-header: #343a40;
+      --theme-text-link: #007bff;
+      --theme-text-link-hover: #0056b3;
+      --theme-bg-button: #e9ecef;
+      --theme-text-button: #495057;
+      --theme-border-button: #ced4da;
+      --theme-bg-button-hover: #dee2e6;
+      --theme-icon-bg: #ffffff;
+      --theme-icon-border: #dee2e6;
+      --theme-sub-bom-border: #ced4da;
+    }
+
+    .theme-modern {
+      --theme-bg-main: #f8f9fa;
+      --theme-text-main: #212529;
+      --theme-bg-card: #ffffff;
+      --theme-border-card: #dee2e6;
+      --theme-text-header: #343a40;
+      --theme-text-link: #007bff;
+      --theme-text-link-hover: #0056b3;
+      --theme-bg-button: #e9ecef;
+      --theme-text-button: #495057;
+      --theme-border-button: #ced4da;
+      --theme-bg-button-hover: #dee2e6;
+      --theme-icon-bg: #ffffff;
+      --theme-icon-border: #dee2e6;
+      --theme-sub-bom-border: #ced4da;
+    }
+
+    .theme-weathered {
+      --theme-bg-main: #f5f5dc;
+      /* Cream - Beige */
+      --theme-text-main: #5d5d5d;
+      /* Graphite */
+      --theme-bg-card: #fff8e1;
+      /* Lighter cream for cards */
+      --theme-border-card: #d2b48c;
+      /* Tan */
+      --theme-text-header: #4a4a4a;
+      --theme-text-link: #8b4513;
+      /* SaddleBrown */
+      --theme-text-link-hover: #5a2d0c;
+      --theme-bg-button: #e0d6c1;
+      --theme-text-button: #5d5d5d;
+      --theme-border-button: #c1b090;
+      --theme-bg-button-hover: #d2c6b1;
+      --theme-icon-bg: #fff8e1;
+      --theme-icon-border: #d2b48c;
+      --theme-sub-bom-border: #d2b48c;
+    }
+
+    .theme-blueprint {
+      --theme-bg-main: #0a2342;
+      /* Dark blue */
+      --theme-text-main: #e0e6ed;
+      /* Silvery/light blue */
+      --theme-bg-card: #112d4e;
+      /* Slightly lighter blue for cards */
+      --theme-border-card: #3a5e8c;
+      --theme-text-header: #ffffff;
+      --theme-text-link: #7ecfff;
+      --theme-text-link-hover: #add8e6;
+      --theme-bg-button: #274060;
+      --theme-text-button: #e0e6ed;
+      --theme-border-button: #3a5e8c;
+      --theme-bg-button-hover: #3a5e8c;
+      --theme-icon-bg: #e0e6ed;
+      /* Light background for icons to stand out */
+      --theme-icon-border: #3a5e8c;
+      --theme-sub-bom-border: #3a5e8c;
+    }
+
+    .theme-negative {
+      --theme-bg-main: #000000;
+      /* Pure black */
+      --theme-text-main: #ffffff;
+      /* Pure white */
+      --theme-bg-card: #1a1a1a;
+      /* Dark gray for cards */
+      --theme-border-card: #444444;
+      --theme-text-header: #ffffff;
+      --theme-text-link: #60a5fa;
+      /* Light blue */
+      --theme-text-link-hover: #93c5fd;
+      --theme-bg-button: #333333;
+      --theme-text-button: #ffffff;
+      --theme-border-button: #555555;
+      --theme-bg-button-hover: #444444;
+      --theme-icon-bg: #cccccc;
+      /* Light gray for icon background */
+      --theme-icon-border: #555555;
+      --theme-sub-bom-border: #555555;
+    }
+
+    body,
+    html {
+      font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+      font-size: 1rem;
+      letter-spacing: 0.01em;
+      background-color: var(--theme-bg-main);
+      color: var(--theme-text-main);
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    * {
+      font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+    }
+
+    .icon-img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 0.75rem;
+      background-color: var(--theme-icon-bg);
+      border: 1px solid var(--theme-icon-border);
+      border-radius: 0.375rem;
+      padding: 2px;
+    }
+
+    .sub-bom {
+      display: none;
+      margin-left: 1.5em;
+      padding-left: 1em;
+      border-left: 2px dashed var(--theme-sub-bom-border);
+    }
+
+    .collapsible::before {
+      content: '[+] ';
+      font-weight: bold;
+    }
+
+    .collapsible.expanded::before {
+      content: '[-] ';
+      font-weight: bold;
+    }
+
+    .mermaid-container {
+      margin-top: 0.75rem;
+      padding: 0.5rem;
+      border: 1px dashed var(--theme-border-card);
+      border-radius: 0.375rem;
+      background-color: var(--theme-bg-main);
+      overflow: auto;
+    }
+
+    .mermaid-container svg {
+      /* Ensure SVG scales nicely */
+      max-width: 100%;
+      height: auto;
+    }
+
+    .schematic-toggle {
+      cursor: pointer;
+      text-decoration: underline;
+      font-size: 0.875rem;
+      margin-top: 0.5rem;
+      display: inline-block;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="max-w-4xl mx-auto p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-6">
+      <h1 class="text-3xl font-bold mb-2 sm:mb-0" style="color: var(--theme-text-header);">Logic Circuit Tech Tree</h1>
+      <div class="flex items-center gap-4">
+        <button id="backButton" class="hidden px-3 py-1 rounded text-sm border"
+          style="background-color: var(--theme-bg-button); color: var(--theme-text-button); border-color: var(--theme-border-button);">Back</button>
+        <select id="themeSelector" class="px-3 py-1.5 rounded border text-sm"
+          style="background-color: var(--theme-bg-button); color: var(--theme-text-button); border-color: var(--theme-border-button);">
+          <option value="modern">Modern</option>
+          <option value="weathered">Weathered</option>
+          <option value="blueprint">Blueprint</option>
+          <option value="negative">Negative</option>
+        </select>
+      </div>
+    </div>
+    <div id="tierNavigation" class="mb-6 flex flex-wrap gap-2"></div>
+    <div id="techTreeContainer"></div>
+    <div class="mt-8 text-xs" style="color: var(--theme-text-main); opacity: 0.7;">
+      Logic gate icons may be sourced from various creators (e.g., Freepik - Flaticon). Please ensure proper attribution
+      if using specific icon sets.
+      <br>
+      Font: <a href="https://fonts.google.com/specimen/Courier+Prime" target="_blank" class="underline"
+        style="color: var(--theme-text-link);">Courier Prime</a>.
+      UI styled with <a href="https://tailwindcss.com/" target="_blank" class="underline"
+        style="color: var(--theme-text-link);">Tailwind CSS</a> and <a href="https://mermaid.js.org/" target="_blank"
+        class="underline" style="color: var(--theme-text-link);">Mermaid.js</a>.
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({startOnLoad: false});
+    const defaultIcon = "/assets/icons/integrated-circuit.png";
+    // User's icon definitions
+    const icons = {
+      "momentary-switch": "/assets/icons/Switch.png",
+      "latching-switch": "/assets/icons/lightswitch.png",
+      "and-gate": "/assets/icons/AND.png",
+      "or-gate": "/assets/icons/OR.png",
+      "not-gate": "/assets/icons/NOT.png",
+      "nand-gate": "/assets/icons/NAND.png",
+      "nor-gate": "/assets/icons/NOR.png",
+      "xor-gate": "/assets/icons/XOR.png",
+      "xnor-gate": "/assets/icons/XNOR.png",
+      "bus": "/assets/icons/bus.png",
+      "wire": "/assets/icons/wire.png",
+      "sr-latch": "/assets/icons/integrated-circuit.png", // Fallback or specific
+      "d-flipflop": "/assets/icons/integrated-circuit.png", // Fallback or specific
+      "mux-2to1": "/assets/icons/mux.png",
+      "mux-4to1": "/assets/icons/mux.png", // Can use the same mux icon
+      "half-adder": "/assets/icons/integrated-circuit.png", // Fallback or specific
+      "full-adder": "/assets/icons/integrated-circuit.png", // Fallback or specific
+      "adder-2bit": "/assets/icons/integrated-circuit.png" // Fallback or specific
+    };
+
+    // TechTreeData WITH SCHEMATIC DEFINITIONS
+    const techTreeData = {
+      "momentary-switch": {name: "Momentary Switch", tier: 0, description: "Outputs a default state (ON/OFF, selected at placement) unless triggered. When triggered, outputs the alternate state only while the trigger is active. Returns to default when the trigger is removed.", bom: []},
+      "latching-switch": {name: "Latching Switch (T-FlipFlop)", tier: 0, description: "Outputs a default state (ON/OFF, selected at placement). When triggered (e.g., by a clock pulse or action), its output toggles to the opposite state and holds it until the next trigger. Acts as a T-FlipFlop.", bom: []},
+      "and-gate": {name: "AND Gate", tier: 0, description: "Outputs ON (1) if and only if all its inputs are ON (1). Otherwise, outputs OFF (0).", bom: []},
+      "or-gate": {name: "OR Gate", tier: 0, description: "Outputs ON (1) if at least one of its inputs is ON (1). Outputs OFF (0) only if all inputs are OFF (0).", bom: []},
+      "bus": {name: "Bus", tier: 0, description: "Takes a single input and repeats it across 8 outputs. Used for distributing signals.", bom: []},
+      "wire": {name: "Wire/Trace/Path", tier: 0, description: "Connects an available input/output of a circuit to another. Infinite length. Used for routing signals.", bom: []},
+      "not-gate": {name: "NOT Gate (Inverter)", tier: 1, description: "Outputs the logical inverse of its input. If input is ON (1), output is OFF (0). If input is OFF (0), output is ON (1).", bom: [{id: "momentary-switch", count: 1, notes: "Configure default ON. Input acts as trigger."}], schematic: `graph TD;\n  In -->|Input| SW[Momentary Switch: Default ON];\n SW -->|Output| Out;`},
+      "nand-gate": {name: "NAND Gate", tier: 2, description: "Outputs OFF (0) if and only if all its inputs are ON (1). Otherwise, outputs ON (1). (NOT AND)", bom: [{id: "and-gate", count: 1}, {id: "not-gate", count: 1}], schematic: `graph TD;\n  InputA --> AND1[AND Gate];\n  InputB --> AND1;\n  AND1 --> NOT1[NOT Gate];\n  NOT1 --> Output;`},
+      "nor-gate": {name: "NOR Gate", tier: 2, description: "Outputs ON (1) if and only if all its inputs are OFF (0). Otherwise, outputs OFF (0). (NOT OR)", bom: [{id: "or-gate", count: 1}, {id: "not-gate", count: 1}], schematic: `graph TD;\n  InputA --> OR1[OR Gate];\n  InputB --> OR1;\n  OR1 --> NOT1[NOT Gate];\n  NOT1 --> Output;`},
+      "xor-gate": {name: "XOR Gate (Exclusive OR)", tier: 2, description: "Outputs ON (1) if its inputs are different. Outputs OFF (0) if inputs are the same.", bom: [{id: "not-gate", count: 2}, {id: "and-gate", count: 2}, {id: "or-gate", count: 1}], schematic: `graph TD;\n  A --> NOT_A[NOT];\n  B --> NOT_B[NOT];\n  A --> AND1[AND];\n  NOT_B --> AND1;\n  NOT_A --> AND2[AND];\n  B --> AND2;\n  AND1 --> OR1[OR];\n  AND2 --> OR1;\n  OR1 --> Output;`},
+      "xnor-gate": {name: "XNOR Gate (Exclusive NOR)", tier: 3, description: "Outputs ON (1) if its inputs are the same. Outputs OFF (0) if inputs are different. (NOT XOR)", bom: [{id: "xor-gate", count: 1}, {id: "not-gate", count: 1}], schematic: `graph TD;\n  subgraph XOR_Gate;\n    direction LR;\n    XOR_A[Input A] --> XOR_Internal;\n    XOR_B[Input B] --> XOR_Internal;\n    XOR_Internal[XOR Logic] --> XOR_Out;\n  end;\n  XOR_Out --> NOT1[NOT Gate];\n  NOT1 --> Output;`},
+      "half-adder": {name: "Half Adder", tier: 3, description: "Adds two single binary digits (A, B). Produces Sum (S = A XOR B) and Carry (C = A AND B).", bom: [{id: "xor-gate", count: 1}, {id: "and-gate", count: 1}], schematic: `graph TD;\n  InputA --> XOR1[XOR Gate];\n  InputB --> XOR1;\n  InputA --> AND1[AND Gate];\n  InputB --> AND1;\n  XOR1 --> SumOut[Sum];\n  AND1 --> CarryOut[Carry];`},
+      "mux-2to1": {name: "2-to-1 Multiplexer (MUX)", tier: 3, description: "Selects one of two data inputs (A, B) to output (Y) based on a select signal (S). Y = (A AND NOT S) OR (B AND S).", bom: [{id: "not-gate", count: 1, notes: "For select line S."}, {id: "and-gate", count: 2}, {id: "or-gate", count: 1}], schematic: `graph TD;\n  S[Select] --> NOT_S[NOT];\n  DataA --> AND1[AND];\n  NOT_S --> AND1;\n  DataB --> AND2[AND];\n  S --> AND2;\n  AND1 --> OR1[OR];\n  AND2 --> OR1;\n  OR1 --> OutputY;`},
+      "sr-latch": {name: "SR Latch", tier: 3, description: "Basic memory circuit with Set (S) and Reset (R) inputs. Stores one bit. (Cross-coupled NORs)", bom: [{id: "nor-gate", count: 2}], schematic: `graph TD;\n  S[Set] --> NOR1[NOR Gate];\n  R[Reset] --> NOR2[NOR Gate];\n  NOR2 -->|Feedback Q'| NOR1;\n  NOR1 -->|Feedback Q| NOR2;\n  NOR1 --> Q_out[Q];\n  NOR2 --> Q_not_out[Q'];`},
+      "d-flipflop": {name: "D Flip-Flop", tier: 3, description: "Memory element capturing D input at a clock edge. (SR latches, gates)", bom: [{id: "sr-latch", count: 1}, {id: "not-gate", count: 1}, {id: "and-gate", count: 2}], schematic: `graph TD;\n  D[Data] --> AND1[AND Gate];\n  CLK[Clock] --> AND1;\n  D --> NOT_D[NOT Gate];\n  NOT_D --> AND2[AND Gate];\n  CLK --> AND2;\n  subgraph SR_Latch_Internal ["SR Latch"];\n    direction LR;\n    S_in[S] --> SR_Logic[SR Core] --> Q_internal[Q_latch];\n    R_in[R] --> SR_Logic;\n  end;\n  AND1 --> S_in;\n  AND2 --> R_in;\n  Q_internal --> Q_out[Q];`},
+      "mux-4to1": {name: "4-to-1 Multiplexer (MUX)", tier: 4, description: "Selects one of four data inputs based on two select signals. (2-to-1 MUXes, gates)", bom: [{id: "mux-2to1", count: 3}], schematic: `graph TD;\n  S0[Select0] --> MUX_Upper[2-to-1 MUX];\n  S0 --> MUX_Lower[2-to-1 MUX];\n  S1[Select1] --> MUX_Final[2-to-1 MUX];\n  D0[Data0] --> MUX_Upper;\n  D1[Data1] --> MUX_Upper;\n  D2[Data2] --> MUX_Lower;\n  D3[Data3] --> MUX_Lower;\n  MUX_Upper --> MUX_Final;\n  MUX_Lower --> MUX_Final;\n  MUX_Final --> OutputY;`},
+      "full-adder": {name: "Full Adder", tier: 4, description: "Adds three single binary digits (A, B, Carry_In). Produces Sum (S) and Carry_Out (Cout).", bom: [{id: "half-adder", count: 2}, {id: "or-gate", count: 1, notes: "To combine carries."}], schematic: `graph TD;\n  subgraph HA1 [Half Adder 1];\n    InputA1[A] --> HA1_Logic;\n    InputB1[B] --> HA1_Logic;\n    HA1_Logic --> Sum1;\n    HA1_Logic --> Carry1;\n  end;\n  subgraph HA2 [Half Adder 2];\n    InputCin[Cin] --> HA2_Logic;\n    Sum1 --> HA2_Logic;\n    HA2_Logic --> SumOut[Sum];\n    HA2_Logic --> Carry2;\n  end;\n  Carry1 --> OR_Carry[OR Gate];\n  Carry2 --> OR_Carry;\n  OR_Carry --> CarryOut[Cout];`},
+      "adder-2bit": {name: "2-bit Ripple Carry Adder", tier: 4, description: "Adds two 2-bit binary numbers. (Two full adders chained).", bom: [{id: "full-adder", count: 2}], schematic: `graph TD;\n  subgraph FA0 [Full Adder 0 (LSB)];\n    A0 --> FA0_Logic;\n    B0 --> FA0_Logic;\n    C_In0[Initial Carry In] --> FA0_Logic;\n    FA0_Logic --> Sum0[S0];\n    FA0_Logic --> Carry_Out0[C0];\n  end;\n  subgraph FA1 [Full Adder 1 (MSB)];\n    A1 --> FA1_Logic;\n    B1 --> FA1_Logic;\n    Carry_Out0 --> FA1_Logic;\n    FA1_Logic --> Sum1[S1];\n    FA1_Logic --> Carry_Out1[Final Carry Out];\n  end;`}
+    };
+
+    const navigationHistory = [];
+    const backButtonEl = document.getElementById('backButton');
+    const techTreeContainerEl = document.getElementById('techTreeContainer');
+    const tierNavigationContainerEl = document.getElementById('tierNavigation');
+    const themeSelectorEl = document.getElementById('themeSelector');
+    const htmlEl = document.documentElement;
+
+    function updateBackButtonVisibility() {
+      backButtonEl.style.display = navigationHistory.length > 0 ? 'inline-block' : 'none';
+    }
+    function scrollToElement(elementId) {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }
+    }
+    function navigateTo(targetId, isBackNavigation = false) {
+      const currentHash = window.location.hash.substring(1);
+      if (!isBackNavigation && currentHash && currentHash !== targetId && techTreeData[currentHash]) {
+        navigationHistory.push(currentHash);
+      }
+      window.location.hash = targetId;
+      updateBackButtonVisibility();
+    }
+    backButtonEl.addEventListener('click', () => {
+      if (navigationHistory.length > 0) {
+        const previousId = navigationHistory.pop();
+        navigateTo(previousId, true);
+        scrollToElement(previousId);
+      }
+      updateBackButtonVisibility();
+    });
+
+    function createBomList(bomItems, parentCircuitId) {
+      const ul = document.createElement('ul');
+      ul.className = 'list-none pl-0';
+      bomItems.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'mb-1';
+        const componentData = techTreeData[item.id];
+        let itemText = `${item.count}x `;
+
+        if (componentData) {
+          const link = document.createElement('span');
+          link.className = 'cursor-pointer underline';
+          link.style.color = 'var(--theme-text-link)';
+          link.textContent = componentData.name;
+          link.addEventListener('mouseover', () => link.style.color = 'var(--theme-text-link-hover)');
+          link.addEventListener('mouseout', () => link.style.color = 'var(--theme-text-link)');
+          link.addEventListener('click', (e) => {
+            navigateTo(item.id);
+            scrollToElement(item.id);
+          });
+          li.appendChild(document.createTextNode(itemText));
+          li.appendChild(link);
+
+          if (componentData.bom && componentData.bom.length > 0) {
+            const toggle = document.createElement('span');
+            toggle.className = 'collapsible ml-2 cursor-pointer';
+            toggle.style.color = 'var(--theme-text-link)';
+            toggle.title = `Expand/Collapse BOM for ${componentData.name}`;
+
+            const subBomUl = createBomList(componentData.bom, item.id);
+            subBomUl.className = `sub-bom mt-1`;
+
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const isExpanded = subBomUl.style.display === 'block';
+              subBomUl.style.display = isExpanded ? 'none' : 'block';
+              toggle.classList.toggle('expanded', !isExpanded);
+            });
+            li.appendChild(toggle);
+            li.appendChild(subBomUl);
+          }
+        } else {
+          li.textContent = `${itemText} ${item.id} (Primitive or undefined)`;
+        }
+        if (item.notes) {
+          const notesSpan = document.createElement('span');
+          notesSpan.className = 'ml-2 text-xs opacity-70';
+          notesSpan.textContent = `(${item.notes})`;
+          li.appendChild(notesSpan);
+        }
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+
+    function renderTechTree() {
+      techTreeContainerEl.innerHTML = "";
+      tierNavigationContainerEl.innerHTML = "";
+
+      const tiers = {};
+      for (const id in techTreeData) {
+        const circuit = techTreeData[id];
+        if (!tiers[circuit.tier]) tiers[circuit.tier] = [];
+        tiers[circuit.tier].push({id, ...circuit});
+      }
+
+      Object.keys(tiers).sort((a, b) => parseInt(a) - parseInt(b)).forEach(tierNum => {
+        const tierLink = document.createElement('a');
+        tierLink.href = `#tier-${tierNum}`;
+        tierLink.textContent = `Tier ${tierNum}`;
+        tierLink.className = "px-3 py-1 rounded border text-sm hover:opacity-80";
+        tierLink.style.backgroundColor = 'var(--theme-bg-button)';
+        tierLink.style.color = 'var(--theme-text-button)';
+        tierLink.style.borderColor = 'var(--theme-border-button)';
+        tierNavigationContainerEl.appendChild(tierLink);
+      });
+
+      for (const tierNum in tiers) {
+        const tierDiv = document.createElement('div');
+        tierDiv.id = `tier-${tierNum}`;
+        tierDiv.className = "mb-8";
+        const tierHeader = document.createElement('h2');
+        tierHeader.className = "text-xl font-bold mb-4";
+        tierHeader.style.color = 'var(--theme-text-header)';
+        tierHeader.textContent = `Tier ${tierNum}${tierNum == 0 ? " (Primitives)" : ""}`;
+        tierDiv.appendChild(tierHeader);
+
+        tiers[tierNum].forEach(circuit => {
+          const entryDiv = document.createElement('div');
+          entryDiv.className = `mb-6 p-4 rounded-lg shadow-sm border`;
+          entryDiv.style.backgroundColor = 'var(--theme-bg-card)';
+          entryDiv.style.borderColor = 'var(--theme-border-card)';
+          entryDiv.id = circuit.id;
+
+          const header = document.createElement('h3');
+          header.className = "text-lg font-bold flex items-center mb-2";
+          header.style.color = 'var(--theme-text-header)';
+
+          const pictogramSrc = icons[circuit.id] || defaultIcon;
+          const pictogram = document.createElement('img');
+          pictogram.className = `icon-img`;
+          pictogram.src = pictogramSrc;
+          pictogram.alt = `${circuit.name} icon`;
+          header.appendChild(pictogram);
+          header.appendChild(document.createTextNode(circuit.name));
+          entryDiv.appendChild(header);
+
+          const descriptionP = document.createElement('p');
+          descriptionP.className = "mb-2 text-sm";
+          descriptionP.textContent = circuit.description;
+          entryDiv.appendChild(descriptionP);
+
+          if (circuit.bom && circuit.bom.length > 0) {
+            const bomHeader = document.createElement('h4');
+            bomHeader.className = "font-semibold mb-1 text-sm";
+            bomHeader.style.color = 'var(--theme-text-header)';
+            bomHeader.textContent = 'Bill of Materials:';
+            entryDiv.appendChild(bomHeader);
+            entryDiv.appendChild(createBomList(circuit.bom, circuit.id));
+
+            if (circuit.schematic) {
+              const schematicToggle = document.createElement('div');
+              schematicToggle.className = 'schematic-toggle';
+              schematicToggle.style.color = 'var(--theme-text-link)';
+              schematicToggle.textContent = 'Show Schematic [+]';
+
+              const mermaidContainer = document.createElement('div');
+              mermaidContainer.className = 'mermaid-container hidden';
+              mermaidContainer.id = `mermaid-${circuit.id}`;
+
+              const pre = document.createElement('pre');
+              pre.className = 'mermaid';
+              // Content will be set just before rendering
+              mermaidContainer.appendChild(pre);
+
+              schematicToggle.addEventListener('click', async () => {
+                const isHidden = mermaidContainer.classList.contains('hidden');
+                if (isHidden) {
+                  mermaidContainer.classList.remove('hidden');
+                  schematicToggle.textContent = 'Hide Schematic [-]';
+                  if (!mermaidContainer.dataset.rendered || mermaidContainer.dataset.theme !== htmlEl.className) {
+                    try {
+                      pre.textContent = circuit.schematic; // Set content
+                      // Clear previous SVG to force re-render with new theme/content
+                      const existingSvg = mermaidContainer.querySelector('svg');
+                      if (existingSvg) existingSvg.remove();
+                      const errorP = mermaidContainer.querySelector('p.text-red-500');
+                      if (errorP) errorP.remove();
+
+
+                      await mermaid.run({nodes: [pre]});
+                      mermaidContainer.dataset.rendered = "true";
+                      mermaidContainer.dataset.theme = htmlEl.className; // Store current theme
+                    } catch (e) {
+                      console.error("Mermaid rendering error:", e, "for circuit:", circuit.id);
+                      mermaidContainer.innerHTML = `<p class="text-red-500 text-xs">Error rendering schematic.</p>`;
+                    }
+                  }
+                } else {
+                  mermaidContainer.classList.add('hidden');
+                  schematicToggle.textContent = 'Show Schematic [+]';
+                }
+              });
+              entryDiv.appendChild(schematicToggle);
+              entryDiv.appendChild(mermaidContainer);
+            }
+          }
+          tierDiv.appendChild(entryDiv);
+        });
+        techTreeContainerEl.appendChild(tierDiv);
+      }
+      if (window.location.hash) scrollToElement(window.location.hash.substring(1));
+    }
+
+    async function applyTheme(themeName) {
+      htmlEl.className = `theme-${themeName}`;
+      document.body.style.backgroundColor = `var(--theme-bg-main)`;
+      document.body.style.color = `var(--theme-text-main)`;
+      localStorage.setItem('selectedTheme', themeName);
+
+      let mermaidTheme = 'default';
+      if (themeName === 'blueprint' || themeName === 'negative') {
+        mermaidTheme = 'dark';
+      } else if (themeName === 'weathered') {
+        mermaidTheme = 'neutral';
+      }
+
+      // It's better to re-initialize if you want to deeply change Mermaid's theme
+      // However, for simple color changes, Mermaid diagrams often adapt if their container's CSS changes.
+      // For robust theme switching with Mermaid, re-rendering diagrams is often needed.
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: mermaidTheme,
+        // Example of themeVariables if you want finer control over Mermaid's internal styling
+        // themeVariables: {
+        //   primaryColor: getComputedStyle(htmlEl).getPropertyValue('--theme-bg-card').trim(),
+        //   primaryTextColor: getComputedStyle(htmlEl).getPropertyValue('--theme-text-main').trim(),
+        //   lineColor: getComputedStyle(htmlEl).getPropertyValue('--theme-border-card').trim(),
+        //   // ... etc
+        // }
+      });
+
+      renderTechTree();
+
+      // Force re-render of any *visible* mermaid diagrams with the new theme
+      // This ensures they pick up the new mermaidTheme setting
+      const visibleMermaidContainers = document.querySelectorAll('.mermaid-container:not(.hidden)');
+      for (const container of visibleMermaidContainers) {
+        const preElement = container.querySelector('.mermaid');
+        const circuitId = container.id.replace('mermaid-', '');
+        const circuit = techTreeData[circuitId];
+
+        if (preElement && circuit && circuit.schematic) {
+          try {
+            preElement.textContent = circuit.schematic; // Ensure content is fresh
+            const existingSvg = container.querySelector('svg');
+            if (existingSvg) existingSvg.remove();
+            const errorP = container.querySelector('p.text-red-500');
+            if (errorP) errorP.remove();
+
+            await mermaid.run({nodes: [preElement]});
+            container.dataset.rendered = "true"; // Mark as rendered for this theme
+            container.dataset.theme = htmlEl.className;
+          } catch (e) {
+            console.error("Mermaid re-rendering error on theme change:", e, "for circuit:", circuitId);
+            container.innerHTML = `<p class="text-red-500 text-xs">Error re-rendering schematic.</p>`;
+          }
+        }
+      }
+    }
+
+    themeSelectorEl.addEventListener('change', (e) => {
+      applyTheme(e.target.value);
+    });
+
+    const savedTheme = localStorage.getItem('selectedTheme') || 'modern';
+    themeSelectorEl.value = savedTheme;
+    applyTheme(savedTheme);
+
+    updateBackButtonVisibility();
+    window.addEventListener('hashchange', () => {
+      updateBackButtonVisibility();
+      if (window.location.hash) scrollToElement(window.location.hash.substring(1));
+    });
+
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-white text-black">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Logic Circuit Tech Tree</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome (for generic icons) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <!-- Courier Prime (Typewriter aesthetic) -->
+  <link href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body,
+    html {
+      font-family: 'Courier Prime', 'Courier New', Courier, monospace !important;
+      font-size: 1rem;
+      letter-spacing: 0.01em;
+    }
+
+    .typewriter {
+      font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+      font-variant-ligatures: none;
+      font-feature-settings: "liga" 0;
+    }
+
+    .blueprint-bg {
+      background: #0a2342;
+      color: #e0e6ed;
+    }
+
+    .blueprint-border {
+      border-color: #3a5e8c;
+    }
+
+    .blueprint-box {
+      background: #112d4e;
+      border: 2px solid #3a5e8c;
+    }
+
+    .whiteboard-bg {
+      background: #fff;
+      color: #222;
+    }
+
+    .whiteboard-border {
+      border-color: #bbb;
+    }
+
+    .whiteboard-box {
+      background: #f9f9f9;
+      border: 2px solid #bbb;
+    }
+
+    .icon-img {
+      width: 40px;
+      height: 40px;
+      object-fit: contain;
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 0.75rem;
+      background: #fff;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      padding: 2px;
+    }
+
+    .circuit-link {
+      color: #2563eb;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .circuit-link:hover {
+      color: #1e40af;
+      text-decoration: underline;
+    }
+
+    .collapsible {
+      cursor: pointer;
+      font-weight: bold;
+      color: #2563eb;
+      margin-left: 0.5em;
+    }
+
+    .collapsible::before {
+      content: '[+] ';
+    }
+
+    .collapsible.expanded::before {
+      content: '[-] ';
+    }
+
+    .sub-bom {
+      display: none;
+      margin-left: 1.5em;
+      border-left: 2px dashed #bbb;
+      padding-left: 1em;
+    }
+
+    .blueprint .sub-bom {
+      border-left: 2px dashed #3a5e8c;
+    }
+
+    .blueprint .circuit-link {
+      color: #7ecfff;
+    }
+
+    .blueprint .circuit-link:hover {
+      color: #fff;
+    }
+
+    .blueprint .collapsible {
+      color: #7ecfff;
+    }
+
+    .blueprint .collapsible.expanded {
+      color: #fff;
+    }
+
+    .blueprint .icon-img {
+      background: #e0e6ed;
+      border: 1px solid #3a5e8c;
+    }
+
+    .blueprint .circuit-entry {
+      background: #112d4e;
+      border: 2px solid #3a5e8c;
+    }
+
+    .whiteboard .circuit-entry {
+      background: #f9f9f9;
+      border: 2px solid #bbb;
+    }
+
+    .whiteboard .icon-img {
+      background: #fff;
+      border: 1px solid #bbb;
+    }
+
+    .whiteboard .circuit-link {
+      color: #2563eb;
+    }
+
+    .whiteboard .circuit-link:hover {
+      color: #1e40af;
+    }
+
+    .whiteboard .collapsible {
+      color: #2563eb;
+    }
+
+    .whiteboard .collapsible.expanded {
+      color: #1e40af;
+    }
+
+    /* Slightly imperfect typewriter effect (optional) */
+    .typewriter {
+      text-shadow: 0.5px 0.5px 0 #bbb, 0.5px 0.5px 0 #bbb;
+    }
+  </style>
+</head>
+
+<body class="whiteboard-bg transition-colors duration-300">
+  <div class="max-w-4xl mx-auto p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4">
+      <h1 class="text-3xl font-bold typewriter mb-2 sm:mb-0">Logic Circuit Tech Tree</h1>
+      <div class="flex items-center gap-4">
+        <button id="backButton"
+          class="hidden px-3 py-1 rounded border border-gray-400 bg-gray-100 hover:bg-gray-200 text-sm typewriter">Back</button>
+        <label class="flex items-center cursor-pointer typewriter">
+          <input type="checkbox" id="darkModeToggle" class="mr-2">
+          <span>Blueprint Mode</span>
+        </label>
+      </div>
+    </div>
+    <div id="tierNavigation" class="mb-4 flex flex-wrap gap-2 typewriter"></div>
+    <div id="techTreeContainer"></div>
+    <div class="mt-8 text-xs text-gray-500 typewriter">
+      Logic gate icons by <a href="https://www.flaticon.com/free-icons/logic-gates" title="logic gates icons"
+        class="underline" target="_blank">Freepik - Flaticon</a>.
+      <br>
+      Font: <a href="https://fonts.google.com/specimen/Courier+Prime" class="underline" target="_blank">Courier
+        Prime</a> (Google Fonts).
+      <br>
+      UI styled with <a href="https://tailwindcss.com/" class="underline" target="_blank">Tailwind CSS</a>.
+    </div>
+  </div>
+  <script>
+    // Flaticon logic gate icons (PNG, 64x64, white background for light, blue for dark)
+    // Attribution: https://www.flaticon.com/free-icons/logic-gates
+    const icons = {
+      "momentary-switch": "https://cdn-icons-png.flaticon.com/64/11497/11497313.png",
+      "latching-switch": "https://cdn-icons-png.flaticon.com/64/11497/11497312.png",
+      "and-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497306.png",
+      "or-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497310.png",
+      "not-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497309.png",
+      "nand-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497308.png",
+      "nor-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497311.png",
+      "xor-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497314.png",
+      "xnor-gate": "https://cdn-icons-png.flaticon.com/64/11497/11497315.png",
+      "bus": "https://cdn-icons-png.flaticon.com/64/11497/11497316.png",
+      "wire": "https://cdn-icons-png.flaticon.com/64/11497/11497317.png",
+      "sr-latch": "https://cdn-icons-png.flaticon.com/64/11497/11497318.png",
+      "d-flipflop": "https://cdn-icons-png.flaticon.com/64/11497/11497319.png",
+      "mux-2to1": "https://cdn-icons-png.flaticon.com/64/11497/11497320.png",
+      "mux-4to1": "https://cdn-icons-png.flaticon.com/64/11497/11497321.png",
+      "half-adder": "https://cdn-icons-png.flaticon.com/64/11497/11497322.png",
+      "full-adder": "https://cdn-icons-png.flaticon.com/64/11497/11497323.png",
+      "adder-2bit": "https://cdn-icons-png.flaticon.com/64/11497/11497324.png"
+    };
+
+    // Tech tree data
+    const techTreeData = {
+      // Tier 0: Primitives
+      "momentary-switch": {
+        name: "Momentary Switch", tier: 0, pictogram: icons["momentary-switch"],
+        description: "Outputs a default state (ON/OFF, selected at placement) unless triggered. When triggered, outputs the alternate state only while the trigger is active. Returns to default when the trigger is removed.",
+        bom: []
+      },
+      "latching-switch": {
+        name: "Latching Switch (T-FlipFlop)", tier: 0, pictogram: icons["latching-switch"],
+        description: "Outputs a default state (ON/OFF, selected at placement). When triggered (e.g., by a clock pulse or action), its output toggles to the opposite state and holds it until the next trigger. Acts as a T-FlipFlop.",
+        bom: []
+      },
+      "and-gate": {
+        name: "AND Gate", tier: 0, pictogram: icons["and-gate"],
+        description: "Outputs ON (1) if and only if all its inputs are ON (1). Otherwise, outputs OFF (0).",
+        bom: []
+      },
+      "or-gate": {
+        name: "OR Gate", tier: 0, pictogram: icons["or-gate"],
+        description: "Outputs ON (1) if at least one of its inputs is ON (1). Outputs OFF (0) only if all inputs are OFF (0).",
+        bom: []
+      },
+      "bus": {
+        name: "Bus", tier: 0, pictogram: icons["bus"],
+        description: "Takes a single input and repeats it across 8 outputs. Used for distributing signals to multiple destinations.",
+        bom: []
+      },
+      "wire": {
+        name: "Wire/Trace/Path", tier: 0, pictogram: icons["wire"],
+        description: "Connects an available input/output of a circuit to another. Infinite length. Used for routing signals.",
+        bom: []
+      },
+      // Tier 1: Basic Derived Logic
+      "not-gate": {
+        name: "NOT Gate (Inverter)", tier: 1, pictogram: icons["not-gate"],
+        description: "Outputs the logical inverse of its input. If input is ON (1), output is OFF (0). If input is OFF (0), output is ON (1).",
+        bom: [
+          {id: "momentary-switch", count: 1, notes: "Configure with default state ON. The input signal acts as the trigger."}
+        ]
+      },
+      // Tier 2: Universal Gates & Basic Combinational
+      "nand-gate": {
+        name: "NAND Gate", tier: 2, pictogram: icons["nand-gate"],
+        description: "Outputs OFF (0) if and only if all its inputs are ON (1). Otherwise, outputs ON (1). (Equivalent to NOT AND)",
+        bom: [{id: "and-gate", count: 1}, {id: "not-gate", count: 1}]
+      },
+      "nor-gate": {
+        name: "NOR Gate", tier: 2, pictogram: icons["nor-gate"],
+        description: "Outputs ON (1) if and only if all its inputs are OFF (0). Otherwise, outputs OFF (0). (Equivalent to NOT OR)",
+        bom: [{id: "or-gate", count: 1}, {id: "not-gate", count: 1}]
+      },
+      "xor-gate": {
+        name: "XOR Gate (Exclusive OR)", tier: 2, pictogram: icons["xor-gate"],
+        description: "Outputs ON (1) if its inputs are different (one ON, one OFF). Outputs OFF (0) if its inputs are the same.",
+        bom: [
+          {id: "not-gate", count: 2}, {id: "and-gate", count: 2}, {id: "or-gate", count: 1}
+        ]
+      },
+      // Tier 3: More Complex Combinational
+      "xnor-gate": {
+        name: "XNOR Gate (Exclusive NOR)", tier: 3, pictogram: icons["xnor-gate"],
+        description: "Outputs ON (1) if its inputs are the same. Outputs OFF (0) if its inputs are different. (Equivalent to NOT XOR)",
+        bom: [{id: "xor-gate", count: 1}, {id: "not-gate", count: 1}]
+      },
+      "half-adder": {
+        name: "Half Adder", tier: 3, pictogram: icons["half-adder"],
+        description: "Adds two single binary digits (A and B). Produces a Sum (S) output (A XOR B) and a Carry (C) output (A AND B).",
+        bom: [{id: "xor-gate", count: 1}, {id: "and-gate", count: 1}]
+      },
+      "mux-2to1": {
+        name: "2-to-1 Multiplexer (MUX)", tier: 3, pictogram: icons["mux-2to1"],
+        description: "Selects one of two data inputs (A or B) to pass to the output (Y) based on a select signal (S). Logic: Y = (A AND NOT S) OR (B AND S).",
+        bom: [{id: "not-gate", count: 1, notes: "For the select line S."}, {id: "and-gate", count: 2}, {id: "or-gate", count: 1}]
+      },
+      "sr-latch": {
+        name: "SR Latch", tier: 3, pictogram: icons["sr-latch"],
+        description: "A basic memory circuit with Set (S) and Reset (R) inputs. Stores a single bit. Built from two cross-coupled NOR gates.",
+        bom: [{id: "nor-gate", count: 2}]
+      },
+      "d-flipflop": {
+        name: "D Flip-Flop", tier: 3, pictogram: icons["d-flipflop"],
+        description: "A memory element that captures the value of the D input at a clock edge and holds it until the next clock. Built from SR latches and logic gates.",
+        bom: [{id: "sr-latch", count: 2}, {id: "not-gate", count: 1}, {id: "and-gate", count: 2}]
+      },
+      // Tier 4: Advanced Combinational/Sequential
+      "mux-4to1": {
+        name: "4-to-1 Multiplexer (MUX)", tier: 4, pictogram: icons["mux-4to1"],
+        description: "Selects one of four data inputs to pass to the output based on two select signals. Built from 2-to-1 MUXes and logic gates.",
+        bom: [{id: "mux-2to1", count: 3}, {id: "or-gate", count: 1}]
+      },
+      "full-adder": {
+        name: "Full Adder", tier: 4, pictogram: icons["full-adder"],
+        description: "Adds three single binary digits (A, B, and Carry_In Cin). Produces a Sum (S) output and a Carry_Out (Cout) output.",
+        bom: [{id: "half-adder", count: 2}, {id: "or-gate", count: 1, notes: "To combine carries from Half Adders."}]
+      },
+      "adder-2bit": {
+        name: "2-bit Ripple Carry Adder", tier: 4, pictogram: icons["adder-2bit"],
+        description: "Adds two 2-bit binary numbers. Built from two full adders chained together.",
+        bom: [{id: "full-adder", count: 2}]
+      }
+    };
+
+    // Navigation and rendering logic
+    const navigationHistory = [];
+    const backButton = document.getElementById('backButton');
+    const techTreeContainer = document.getElementById('techTreeContainer');
+    const tierNavigationContainer = document.getElementById('tierNavigation');
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    const htmlRoot = document.documentElement;
+    const body = document.body;
+
+    function updateBackButtonVisibility() {
+      backButton.style.display = navigationHistory.length > 0 ? 'inline-block' : 'none';
+    }
+
+    function scrollToElement(elementId) {
+      const element = document.getElementById(elementId);
+      if (element) {
+        element.scrollIntoView({behavior: 'smooth', block: 'start'});
+      }
+    }
+
+    function navigateTo(targetId, isBackNavigation = false) {
+      const currentHash = window.location.hash.substring(1);
+      if (!isBackNavigation && currentHash && currentHash !== targetId) {
+        const currentCircuitExists = Object.keys(techTreeData).find(id => id === currentHash);
+        if (currentCircuitExists) navigationHistory.push(currentHash);
+      }
+      window.location.hash = targetId;
+      updateBackButtonVisibility();
+    }
+
+    backButton.addEventListener('click', () => {
+      if (navigationHistory.length > 0) {
+        const previousId = navigationHistory.pop();
+        navigateTo(previousId, true);
+        scrollToElement(previousId);
+      }
+      updateBackButtonVisibility();
+    });
+
+    function createBomList(bomItems, parentCircuitId, theme) {
+      const ul = document.createElement('ul');
+      ul.className = 'list-none pl-0';
+      bomItems.forEach(item => {
+        const li = document.createElement('li');
+        li.className = 'mb-1 typewriter';
+        const componentData = techTreeData[item.id];
+        let itemText = `${item.count}x `;
+
+        if (componentData) {
+          const link = document.createElement('span');
+          link.className = 'circuit-link';
+          link.textContent = componentData.name;
+          link.addEventListener('click', (e) => {
+            navigateTo(item.id);
+            scrollToElement(item.id);
+          });
+          li.appendChild(document.createTextNode(itemText));
+          li.appendChild(link);
+
+          if (componentData.bom && componentData.bom.length > 0) {
+            const toggle = document.createElement('span');
+            toggle.className = 'collapsible';
+            toggle.title = `Expand/Collapse BOM for ${componentData.name}`;
+            const subBomUl = createBomList(componentData.bom, item.id, theme);
+            subBomUl.className = `sub-bom ${theme}`;
+            toggle.addEventListener('click', (e) => {
+              e.stopPropagation();
+              const isExpanded = subBomUl.style.display === 'block';
+              subBomUl.style.display = isExpanded ? 'none' : 'block';
+              toggle.classList.toggle('expanded', !isExpanded);
+            });
+            li.appendChild(toggle);
+            li.appendChild(subBomUl);
+          }
+        } else {
+          li.textContent = `${itemText} ${item.id} (Primitive or undefined)`;
+        }
+        if (item.notes) {
+          const notesSpan = document.createElement('span');
+          notesSpan.className = 'ml-2 text-xs text-gray-500';
+          notesSpan.textContent = `(${item.notes})`;
+          li.appendChild(notesSpan);
+        }
+        ul.appendChild(li);
+      });
+      return ul;
+    }
+
+    function renderTechTree(theme = "whiteboard") {
+      techTreeContainer.innerHTML = "";
+      tierNavigationContainer.innerHTML = "";
+
+      const tiers = {};
+      for (const id in techTreeData) {
+        const circuit = techTreeData[id];
+        if (!tiers[circuit.tier]) {
+          tiers[circuit.tier] = [];
+        }
+        tiers[circuit.tier].push({id, ...circuit});
+      }
+
+      // Create Tier Navigation
+      Object.keys(tiers).sort((a, b) => a - b).forEach(tierNum => {
+        const tierLink = document.createElement('a');
+        tierLink.href = `#tier-${tierNum}`;
+        tierLink.textContent = `Tier ${tierNum}`;
+        tierLink.className = "px-2 py-1 rounded border border-gray-300 bg-gray-100 hover:bg-gray-200 typewriter";
+        tierNavigationContainer.appendChild(tierLink);
+      });
+
+      for (const tierNum in tiers) {
+        const tierDiv = document.createElement('div');
+        tierDiv.id = `tier-${tierNum}`;
+        tierDiv.className = "mb-8";
+        const tierHeader = document.createElement('h2');
+        tierHeader.className = "text-xl font-bold mb-4 typewriter";
+        tierHeader.textContent = `Tier ${tierNum}`;
+        if (tierNum == 0) tierHeader.textContent += " (Primitives)";
+        tierDiv.appendChild(tierHeader);
+
+        tiers[tierNum].forEach(circuit => {
+          const entryDiv = document.createElement('div');
+          entryDiv.className = `circuit-entry mb-6 p-4 rounded-lg shadow-sm border typewriter ${theme === "blueprint" ? "blueprint-box blueprint-border blueprint" : "whiteboard-box whiteboard-border whiteboard"}`;
+          entryDiv.id = circuit.id;
+
+          const header = document.createElement('h3');
+          header.className = "text-lg font-bold flex items-center mb-2 typewriter";
+          if (circuit.pictogram) {
+            const pictogram = document.createElement('img');
+            pictogram.className = `icon-img mr-3 ${theme === "blueprint" ? "border-blueprint" : "border-whiteboard"}`;
+            pictogram.src = circuit.pictogram;
+            pictogram.alt = circuit.name + " icon";
+            header.appendChild(pictogram);
+          }
+          header.appendChild(document.createTextNode(circuit.name));
+          entryDiv.appendChild(header);
+
+          const descriptionP = document.createElement('p');
+          descriptionP.className = "mb-2 typewriter";
+          descriptionP.textContent = circuit.description;
+          entryDiv.appendChild(descriptionP);
+
+          if (circuit.bom && circuit.bom.length > 0) {
+            const bomHeader = document.createElement('h4');
+            bomHeader.className = "font-semibold mb-1 typewriter";
+            bomHeader.textContent = 'Bill of Materials:';
+            entryDiv.appendChild(bomHeader);
+            entryDiv.appendChild(createBomList(circuit.bom, circuit.id, theme));
+          }
+          tierDiv.appendChild(entryDiv);
+        });
+        techTreeContainer.appendChild(tierDiv);
+      }
+      // Handle initial hash
+      if (window.location.hash) {
+        const initialId = window.location.hash.substring(1);
+        scrollToElement(initialId);
+      }
+    }
+
+    // Dark mode toggle logic
+    function setTheme(theme) {
+      if (theme === "blueprint") {
+        htmlRoot.classList.remove("whiteboard-bg", "text-black");
+        htmlRoot.classList.add("blueprint-bg", "text-blue-100");
+        body.classList.remove("whiteboard-bg");
+        body.classList.add("blueprint-bg");
+        renderTechTree("blueprint");
+      } else {
+        htmlRoot.classList.remove("blueprint-bg", "text-blue-100");
+        htmlRoot.classList.add("whiteboard-bg", "text-black");
+        body.classList.remove("blueprint-bg");
+        body.classList.add("whiteboard-bg");
+        renderTechTree("whiteboard");
+      }
+    }
+
+    darkModeToggle.addEventListener('change', (e) => {
+      setTheme(e.target.checked ? "blueprint" : "whiteboard");
+    });
+
+    // Initial render
+    renderTechTree();
+    updateBackButtonVisibility();
+
+    // Hash navigation
+    window.addEventListener('hashchange', () => {
+      updateBackButtonVisibility();
+      if (window.location.hash) {
+        scrollToElement(window.location.hash.substring(1));
+      }
+    });
+  </script>
+</body>
+
+</html>
