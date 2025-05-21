@@ -32,7 +32,14 @@ static int wiringFromComponentId = -1;
 static void DrawGameplayGrid(void);
 static void DrawComponentsOnGrid(const GameState *gameState);
 static void DrawConnections(const GameState *gameState);
-static void DrawWiringPreview(void);
+// static void DrawWiringPreview(void); // This function was small and specific,
+// can be inlined or kept if complex later
+
+// Moved declaration (or full definition) up
+static Vector2 GetWorldPositionForGrid(Vector2 gridPos) {
+  return (Vector2){gridPos.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f,
+                   gridPos.y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f};
+}
 
 bool Client_Init(void) {
   InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, WINDOW_TITLE);
@@ -72,6 +79,8 @@ bool Client_Init(void) {
   currentClientScreen = CLIENT_SCREEN_LOADING;
   framesCounter = 0;
   selectedCardIndex = -1;
+  interactionMode = INTERACTION_MODE_NORMAL;
+  wiringFromComponentId = -1;
   return true;
 }
 
@@ -161,9 +170,7 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
   for (int i = 0; i < gameState->componentCount; ++i) {
     if (gameState->componentsOnGrid[i].isActive) {
       CircuitComponent comp = gameState->componentsOnGrid[i];
-      Vector2 worldPos = {
-          comp.gridPosition.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f,
-          comp.gridPosition.y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f};
+      Vector2 worldPos = GetWorldPositionForGrid(comp.gridPosition);
 
       Rectangle compRec = {worldPos.x - GRID_CELL_SIZE / 3.0f,
                            worldPos.y - GRID_CELL_SIZE / 3.0f,
@@ -188,11 +195,11 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
         compText = "OR";
         break;
       case COMP_SOURCE:
-        compColor = GOLD; // Always ON
+        compColor = GOLD;
         compText = "SRC";
         break;
       case COMP_SINK:
-        compColor = DARKBROWN; // Always OFF
+        compColor = DARKBROWN;
         compText = "SNK";
         break;
       default:
@@ -202,7 +209,7 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
       DrawRectangleRec(compRec, compColor);
       DrawRectangleLinesEx(compRec, 2, DARKGRAY);
 
-      if (clientFont.texture.id > 0) { // Ensure font is loaded
+      if (clientFont.texture.id > 0) {
         float compFontSize = 10;
         float compSpacing = 1;
         Vector2 textSize =
@@ -211,6 +218,37 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
                    (Vector2){compRec.x + (compRec.width - textSize.x) / 2,
                              compRec.y + (compRec.height - textSize.y) / 2},
                    compFontSize, compSpacing, BLACK);
+      }
+    }
+  }
+}
+
+static void DrawConnections(const GameState *gameState) {
+  if (gameState == NULL)
+    return;
+  for (int i = 0; i < gameState->connectionCount; ++i) {
+    if (gameState->connections[i].isActive) {
+      Connection conn = gameState->connections[i];
+      const CircuitComponent *fromComp = NULL; // Corrected to const
+      const CircuitComponent *toComp = NULL;   // Corrected to const
+
+      for (int j = 0; j < gameState->componentCount; ++j) {
+        if (gameState->componentsOnGrid[j].isActive) {
+          if (gameState->componentsOnGrid[j].id == conn.fromComponentId) {
+            fromComp = &gameState->componentsOnGrid[j];
+          }
+          if (gameState->componentsOnGrid[j].id == conn.toComponentId) {
+            toComp = &gameState->componentsOnGrid[j];
+          }
+        }
+      }
+
+      if (fromComp && toComp) {
+        Vector2 startPos = GetWorldPositionForGrid(fromComp->gridPosition);
+        Vector2 endPos = GetWorldPositionForGrid(toComp->gridPosition);
+        STUB("For components with multiple inputs/outputs, adjust start/end "
+             "points. For now, connect centers.");
+        DrawLineEx(startPos, endPos, 2.0f, COLOR_TEXT_PRIMARY);
       }
     }
   }
@@ -231,11 +269,11 @@ static void DrawGameplayScreen(const GameState *gameState) {
   BeginMode2D(gameCamera);
   DrawGameplayGrid();
   DrawComponentsOnGrid(gameState);
-  DrawConnections(gameState); // Draw established connections
+  DrawConnections(gameState);
 
   if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT &&
       wiringFromComponentId != -1) {
-    CircuitComponent *fromComp = NULL;
+    const CircuitComponent *fromComp = NULL; // Corrected to const
     for (int i = 0; i < gameState->componentCount; ++i) {
       if (gameState->componentsOnGrid[i].id == wiringFromComponentId) {
         fromComp = &gameState->componentsOnGrid[i];
@@ -283,8 +321,19 @@ static void DrawGameplayScreen(const GameState *gameState) {
   int previousLabelAlignment = GuiGetStyle(LABEL, TEXT_ALIGNMENT);
   GuiSetStyle(LABEL, TEXT_SIZE, CARD_TEXT_SIZE);
   GuiSetStyle(LABEL, TEXT_ALIGNMENT, TEXT_ALIGN_LEFT);
-  for (int i = 0; i < gameState->handCardCount; ++i) { /* ... */
-  } // Card drawing loop remains same
+  for (int i = 0; i < gameState->handCardCount; ++i) {
+    Rectangle cardRect = {currentCardX, cardAreaY, CARD_WIDTH, CARD_HEIGHT};
+    Color cardBorderColor =
+        (i == selectedCardIndex) ? COLOR_ACCENT_PRIMARY : COLOR_CARD_BORDER;
+    DrawRectangleRec(cardRect, COLOR_CARD_BG);
+    DrawRectangleLinesEx(cardRect, (i == selectedCardIndex) ? 3 : 1,
+                         cardBorderColor);
+    Rectangle cardTextRect = {
+        cardRect.x + CARD_PADDING, cardRect.y + CARD_PADDING,
+        cardRect.width - 2 * CARD_PADDING, cardRect.height - 2 * CARD_PADDING};
+    GuiLabel(cardTextRect, gameState->playerHand[i].name);
+    currentCardX += CARD_WIDTH + CARD_SPACING;
+  }
   GuiSetStyle(LABEL, TEXT_SIZE, previousLabelTextSize);
   GuiSetStyle(LABEL, TEXT_ALIGNMENT, previousLabelAlignment);
   DrawTextEx(clientFont,
@@ -309,51 +358,6 @@ static void DrawGameplayScreen(const GameState *gameState) {
              20, 1, COLOR_TEXT_SECONDARY);
 }
 
-static Vector2 GetWorldPositionForGrid(Vector2 gridPos) {
-  return (Vector2){gridPos.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f,
-                   gridPos.y * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f};
-}
-
-static void DrawConnections(const GameState *gameState) {
-  if (gameState == NULL)
-    return;
-  for (int i = 0; i < gameState->connectionCount; ++i) {
-    if (gameState->connections[i].isActive) {
-      Connection conn = gameState->connections[i];
-      CircuitComponent *fromComp = NULL;
-      CircuitComponent *toComp = NULL;
-
-      for (int j = 0; j < gameState->componentCount; ++j) {
-        if (gameState->componentsOnGrid[j].isActive) {
-          if (gameState->componentsOnGrid[j].id == conn.fromComponentId) {
-            fromComp = &gameState->componentsOnGrid[j];
-          }
-          if (gameState->componentsOnGrid[j].id == conn.toComponentId) {
-            toComp = &gameState->componentsOnGrid[j];
-          }
-        }
-      }
-
-      if (fromComp && toComp) {
-        Vector2 startPos = GetWorldPositionForGrid(fromComp->gridPosition);
-        Vector2 endPos = GetWorldPositionForGrid(toComp->gridPosition);
-        STUB("For components with multiple inputs/outputs, adjust start/end "
-             "points For now, connect centers");
-        DrawLineEx(startPos, endPos, 2.0f, COLOR_TEXT_PRIMARY);
-      }
-    }
-  }
-}
-
-static void DrawWiringPreview(void) {
-  if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT &&
-      wiringFromComponentId != -1) {
-    Vector2 mouseScreenPos = GetMousePosition();
-    DrawLineEx((Vector2){SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2}, mouseScreenPos,
-               2.0f, Fade(COLOR_ACCENT_PRIMARY, 0.7f));
-  }
-}
-
 void Client_UpdateAndDraw(GameState *gameState) {
   switch (currentClientScreen) {
   case CLIENT_SCREEN_LOADING:
@@ -374,12 +378,20 @@ void Client_UpdateAndDraw(GameState *gameState) {
       wiringFromComponentId = -1;
       selectedCardIndex = -1;
     }
-    if (IsKeyPressed(KEY_D)) { /* ... */
+    if (IsKeyPressed(KEY_D)) {
+      if (Server_PlayerDrawCard(gameState)) {
+        TraceLog(LOG_INFO,
+                 "CLIENT: Player attempted to draw a card. Hand size now: %d",
+                 gameState->handCardCount);
+      } else {
+        TraceLog(LOG_INFO, "CLIENT: Player tried to draw, but couldn't (hand "
+                           "full or no cards left).");
+      }
     }
-    if (IsKeyPressed(KEY_W)) { // 'W' to enter/exit wiring mode
+    if (IsKeyPressed(KEY_W)) {
       if (interactionMode == INTERACTION_MODE_NORMAL) {
         interactionMode = INTERACTION_MODE_WIRING_SELECT_OUTPUT;
-        selectedCardIndex = -1; // Deselect card if entering wiring mode
+        selectedCardIndex = -1;
         TraceLog(LOG_INFO, "CLIENT: Entered Wiring Mode - Select Output.");
       } else {
         interactionMode = INTERACTION_MODE_NORMAL;
@@ -396,23 +408,117 @@ void Client_UpdateAndDraw(GameState *gameState) {
     Vector2 mousePosition = GetMousePosition();
 
     if (CheckCollisionPointRec(mousePosition, playArea)) {
-      if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) { /* ... camera pan ... */
+      if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
+        Vector2 delta = GetMouseDelta();
+        delta = Vector2Scale(delta, -1.0f / gameCamera.zoom);
+        gameCamera.target = Vector2Add(gameCamera.target, delta);
       }
       float wheel = GetMouseWheelMove();
-      if (wheel != 0) { /* ... camera zoom ... */
+      if (wheel != 0) {
+        Vector2 mouseWorldPosBeforeZoom =
+            GetScreenToWorld2D(mousePosition, gameCamera);
+        gameCamera.zoom += (wheel * 0.125f);
+        if (gameCamera.zoom < 0.25f)
+          gameCamera.zoom = 0.25f;
+        if (gameCamera.zoom > 4.0f)
+          gameCamera.zoom = 4.0f;
+        Vector2 mouseWorldPosAfterZoom =
+            GetScreenToWorld2D(mousePosition, gameCamera);
+        gameCamera.target = Vector2Add(
+            gameCamera.target,
+            Vector2Subtract(mouseWorldPosBeforeZoom, mouseWorldPosAfterZoom));
       }
     }
 
     if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
       if (interactionMode == INTERACTION_MODE_NORMAL) {
-        if (CheckCollisionPointRec(mousePosition,
-                                   deckArea)) { /* ... card selection ... */
+        if (CheckCollisionPointRec(mousePosition, deckArea)) {
+          float currentCardX = deckArea.x + UI_PADDING;
+          float handLabelY = deckArea.y + UI_PADDING;
+          float cardAreaY = handLabelY + 20 + UI_PADDING;
+          for (int i = 0; i < gameState->handCardCount; ++i) {
+            Rectangle cardRect = {currentCardX, cardAreaY, CARD_WIDTH,
+                                  CARD_HEIGHT};
+            if (CheckCollisionPointRec(mousePosition, cardRect)) {
+              if (selectedCardIndex == i)
+                selectedCardIndex = -1;
+              else
+                selectedCardIndex = i;
+              TraceLog(LOG_INFO, "CLIENT: Card %d selected/deselected.", i);
+              break;
+            }
+            currentCardX += CARD_WIDTH + CARD_SPACING;
+          }
         } else if (CheckCollisionPointRec(mousePosition, playArea)) {
           Vector2 worldMousePos = GetScreenToWorld2D(mousePosition, gameCamera);
           Vector2 gridPos = {floorf(worldMousePos.x / GRID_CELL_SIZE),
                              floorf(worldMousePos.y / GRID_CELL_SIZE)};
-          if (selectedCardIndex != -1) { /* ... component placement ... */
-          } else {                       /* ... component interaction ... */
+          if (selectedCardIndex != -1) {
+            if (gameState->playerHand[selectedCardIndex].type ==
+                CARD_TYPE_OBJECT) {
+              bool cellOccupied = false;
+              for (int i = 0; i < gameState->componentCount; ++i) {
+                if (gameState->componentsOnGrid[i].isActive &&
+                    (int)gameState->componentsOnGrid[i].gridPosition.x ==
+                        (int)gridPos.x &&
+                    (int)gameState->componentsOnGrid[i].gridPosition.y ==
+                        (int)gridPos.y) {
+                  cellOccupied = true;
+                  TraceLog(
+                      LOG_WARNING,
+                      "CLIENT: Grid cell (%.0f, %.0f) is already occupied.",
+                      gridPos.x, gridPos.y);
+                  break;
+                }
+              }
+              if (!cellOccupied &&
+                  gameState->componentCount < MAX_COMPONENTS_ON_GRID) {
+                CircuitComponent *newComp =
+                    &gameState->componentsOnGrid[gameState->componentCount];
+                newComp->isActive = true;
+                newComp->id = gameState->nextComponentId++;
+                newComp->type =
+                    gameState->playerHand[selectedCardIndex].objectToPlace;
+                newComp->gridPosition = gridPos;
+                newComp->outputState = false;
+                newComp->defaultOutputState = false;
+
+                TraceLog(LOG_INFO,
+                         "CLIENT: Placed %s (ID: %d) at grid (%.0f, %.0f)",
+                         gameState->playerHand[selectedCardIndex].name,
+                         newComp->id, gridPos.x, gridPos.y);
+                gameState->componentCount++;
+
+                Server_PlayCardFromHand(gameState, selectedCardIndex);
+                selectedCardIndex = -1;
+              } else if (cellOccupied) {
+                selectedCardIndex = -1;
+              } else {
+                TraceLog(LOG_WARNING,
+                         "CLIENT: Max components reached on grid.");
+                selectedCardIndex = -1;
+              }
+            } else {
+              TraceLog(
+                  LOG_INFO,
+                  "CLIENT: Selected card is not an object card. Deselecting.");
+              selectedCardIndex = -1;
+            }
+          } else {
+            int clickedComponentId = -1;
+            for (int i = 0; i < gameState->componentCount; ++i) {
+              if (gameState->componentsOnGrid[i].isActive) {
+                CircuitComponent comp = gameState->componentsOnGrid[i];
+                if ((int)comp.gridPosition.x == (int)gridPos.x &&
+                    (int)comp.gridPosition.y == (int)gridPos.y) {
+                  clickedComponentId = comp.id;
+                  break;
+                }
+              }
+            }
+            if (clickedComponentId != -1) {
+              Server_InteractWithComponent(gameState, clickedComponentId);
+            }
           }
         }
       } else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT) {
@@ -462,7 +568,6 @@ void Client_UpdateAndDraw(GameState *gameState) {
             int targetInputSlot = -1;
             if (targetComp->type == COMP_AND_GATE ||
                 targetComp->type == COMP_OR_GATE) {
-              // Simple: try to connect to the first available input slot
               for (int s = 0; s < MAX_INPUTS_PER_LOGIC_GATE; ++s) {
                 if (targetComp->inputComponentIDs[s] == -1) {
                   targetInputSlot = s;
@@ -486,10 +591,9 @@ void Client_UpdateAndDraw(GameState *gameState) {
           } else if (clickedCompId == wiringFromComponentId) {
             TraceLog(LOG_INFO, "CLIENT: Cannot connect component to itself.");
           }
-          interactionMode =
-              INTERACTION_MODE_NORMAL; // Exit wiring mode after attempt
+          interactionMode = INTERACTION_MODE_NORMAL;
           wiringFromComponentId = -1;
-        } else { // Clicked outside play area while wiring
+        } else {
           interactionMode = INTERACTION_MODE_NORMAL;
           wiringFromComponentId = -1;
           TraceLog(LOG_INFO,

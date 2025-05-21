@@ -4,6 +4,25 @@
 #include "raylib.h" // For Vector2, Color, TraceLog etc.
 #include <stdbool.h>
 
+// In server.h
+#if defined(PLATFORM_WEB) // For full Raylib web app build
+#include "raylib.h"
+// Potentially include raymath.h if server logic uses it directly
+// #include "raymath.h"
+#elif defined(TOOL_WASM_BUILD) // For headless server logic WASM
+typedef struct Vector2 {
+  float x;
+  float y;
+} Vector2;
+#define TraceLog(logLevel, ...)
+#define LOG_INFO 0
+#define LOG_WARNING 1
+// Define other minimal types/stubs if server.c needs them without full Raylib
+#else // For native desktop build
+#include "raylib.h"
+#include "raymath.h"
+#endif
+
 #define MAX_COMPONENTS_ON_GRID                                                 \
   100 ///< Maximum number of components that can be placed on the grid.
 #define MAX_CARDS_IN_HAND 10 ///< Maximum number of cards a player can hold.

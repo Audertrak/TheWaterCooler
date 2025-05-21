@@ -8,6 +8,25 @@
 #include <string.h>
 #include <time.h>
 
+// In server.c, at the top
+#if defined(PLATFORM_WEB)
+#include "raylib.h" // For TraceLog, etc.
+// #include "raymath.h" // If server logic uses raymath directly
+#elif defined(TOOL_WASM_BUILD)
+// Minimal stubs if needed for headless WASM
+static inline Vector2 Vector2Add(Vector2 v1, Vector2 v2) {
+  return (Vector2){v1.x + v2.x, v1.y + v2.y};
+}
+static inline bool Vector2Equals(Vector2 v1, Vector2 v2) {
+  return (v1.x == v2.x) && (v1.y == v2.y);
+}
+#else // Native
+#include "raylib.h"
+#include "raymath.h"
+#endif
+
+#include "config.h" // For STUB/TODO macros (which themselves use TraceLog)
+
 static Card CreateObjectCard(int id, const char *name, ComponentType objType) {
   Card card;
   card.id = id;
