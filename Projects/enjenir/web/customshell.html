@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>enjenir</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #222;
+    }
+
+    body,
+    canvas {
+      width: 100vw;
+      height: 100vh;
+      display: block;
+    }
+
+    canvas {
+      background: #111;
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="canvas" tabindex="-1"></canvas>
+  <script>
+    // Auto-resize canvas to fill viewport
+    function resizeCanvas() {
+      var canvas = document.getElementById('canvas');
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    window.addEventListener('DOMContentLoaded', resizeCanvas);
+
+    // Optional: Silence Emscripten's print output
+    var Module = {
+      print: function () { },
+      printErr: function () { },
+      canvas: (function () {return document.getElementById('canvas');})()
+    };
+  </script>
+  {{{ SCRIPT }}}
+</body>
+
+</html>

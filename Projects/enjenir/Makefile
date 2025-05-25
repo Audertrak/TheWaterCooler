@@ -15,11 +15,11 @@ DEBUG_EXE = $(NATIVE_BUILD_DIR)/$(PROJECT_NAME)_debug.exe
 WASM_SERVER_LOGIC_OUTPUT = $(WASM_LOGIC_BUILD_DIR)/server_logic.wasm
 
 # Web App output name (HTML file)
-WEB_APP_HTML_FILE = $(WEB_APP_BUILD_DIR)/$(PROJECT_NAME).html
+WEB_APP_HTML_FILE = $(WEB_APP_BUILD_DIR)/index.html
 
 # Asset directory
 ASSETS_DIR = assets
-TARGET_ASSETS_NATIVE_DIR = $(NATIVE_BUILD_DIR)/$(ASSETS_DIR) 
+TARGET_ASSETS_NATIVE_DIR = $(NATIVE_BUILD_DIR)/$(ASSETS_DIR)
 
 # Raylib paths
 RAYLIB_BASE_DIR = lib/raylib
@@ -75,11 +75,13 @@ EMCC_CFLAGS = -std=gnu11 -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 \
               -isystem $(EMSDK)/upstream/emscripten/system/include 
 
 # Linker flags for Native
-SYSTEM_LDFLAGS_NATIVE = -lopengl32 -lgdi32 -lwinmm -lkernel32 -luser32 -lshell32 -ladvapi32 -lole32 \
-                        -Wl,/subsystem:windows
+SYSTEM_LDFLAGS_NATIVE_RELEASE = -lopengl32 -lgdi32 -lwinmm -lkernel32 -luser32 -lshell32 -ladvapi32 -lole32 \
+                                -Wl,/subsystem:windows
+SYSTEM_LDFLAGS_NATIVE_DEBUG = -lopengl32 -lgdi32 -lwinmm -lkernel32 -luser32 -lshell32 -ladvapi32 -lole32 \
+                              -Wl,/subsystem:console
 
 # Emscripten Linker flags
-EMCC_LDFLAGS = --shell-file $(RAYLIB_SRC_DIR)/shell.html \
+EMCC_LDFLAGS = --shell-file web/customshell.html \
                --preload-file $(ASSETS_DIR)@/ \
                -s EXPORTED_FUNCTIONS="['_main','_malloc','_free']" \
                -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap']" \
@@ -88,7 +90,7 @@ EMCC_LDFLAGS = --shell-file $(RAYLIB_SRC_DIR)/shell.html \
 RELEASE_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -O3 -flto -DNDEBUG
 DEBUG_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -g -DDEBUG
 
-all: release debug
+all: release debug web copy-assets-native
 release: $(RELEASE_EXE) copy-assets-native
 debug: $(DEBUG_EXE) copy-assets-native
 web: $(WEB_APP_HTML_FILE) 
@@ -117,11 +119,11 @@ $(NATIVE_BUILD_DIR)/debug/%.o: src/%.c | $(NATIVE_BUILD_DIR)/debug
 
 $(RELEASE_EXE): $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_NATIVE_LIB_FILE)
 	@echo "Linking Native (Release): $@"
-	$(NATIVE_CC) $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE) -o $@
+	$(NATIVE_CC) $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE_RELEASE) -o $@
 
 $(DEBUG_EXE): $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_NATIVE_LIB_FILE)
 	@echo "Linking Native (Debug): $@"
-	$(NATIVE_CC) $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE) -o $@
+	$(NATIVE_CC) $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
 
 wasm_logic: $(WASM_SERVER_LOGIC_OUTPUT)
 $(WASM_SERVER_LOGIC_OUTPUT): $(APP_C_FILES_WASM_LOGIC) | $(WASM_LOGIC_BUILD_DIR)
@@ -134,13 +136,13 @@ $(WEB_APP_HTML_FILE): $(APP_C_FILES_WEB) $(RAYLIB_WEB_SRCS) | $(WEB_APP_BUILD_DI
 
 copy-assets-native: $(ASSETS_DIR) | $(NATIVE_BUILD_DIR)
 	@echo "Copying assets to $(TARGET_ASSETS_NATIVE_DIR)..."
-	@mkdir -p $(TARGET_ASSETS_NATIVE_DIR)
-	@cp -R $(ASSETS_DIR)/* $(TARGET_ASSETS_NATIVE_DIR)/
+	rm -rf $(TARGET_ASSETS_NATIVE_DIR)
+	mkdir -p $(TARGET_ASSETS_NATIVE_DIR)
+	cp -rv $(ASSETS_DIR)/. $(TARGET_ASSETS_NATIVE_DIR)/
 
 clean:
 	@echo "Cleaning build artifacts..."
 	rm -rf $(BUILD_DIR) 
-	rm -f compile_commands.json
 	@echo "Clean complete."
 
 compile_commands:

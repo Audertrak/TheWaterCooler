@@ -1,0 +1,62 @@
+[
+ {
+  "directory": "C:/Users/Tim/.git/thewatercooler/Projects/enjenir",
+  "arguments": [
+   "cc",
+   "-target",
+   "x86_64-windows-gnu",
+   "-std=c11",
+   "-DPLATFORM_DESKTOP",
+   "-DNOGDI",
+   "-Isrc",
+   "-Ilib/raylib/src",
+   "-g",
+   "-DDEBUG",
+   "-c",
+   "src/main.c",
+   "-o",
+   "build/native/debug/main.o"
+  ],
+  "file": "src/main.c"
+ },
+ {
+  "directory": "C:/Users/Tim/.git/thewatercooler/Projects/enjenir",
+  "arguments": [
+   "cc",
+   "-target",
+   "x86_64-windows-gnu",
+   "-std=c11",
+   "-DPLATFORM_DESKTOP",
+   "-DNOGDI",
+   "-Isrc",
+   "-Ilib/raylib/src",
+   "-g",
+   "-DDEBUG",
+   "-c",
+   "src/client.c",
+   "-o",
+   "build/native/debug/client.o"
+  ],
+  "file": "src/client.c"
+ },
+ {
+  "directory": "C:/Users/Tim/.git/thewatercooler/Projects/enjenir",
+  "arguments": [
+   "cc",
+   "-target",
+   "x86_64-windows-gnu",
+   "-std=c11",
+   "-DPLATFORM_DESKTOP",
+   "-DNOGDI",
+   "-Isrc",
+   "-Ilib/raylib/src",
+   "-g",
+   "-DDEBUG",
+   "-c",
+   "src/server.c",
+   "-o",
+   "build/native/debug/server.o"
+  ],
+  "file": "src/server.c"
+ }
+]
