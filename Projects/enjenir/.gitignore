@@ -1,3 +1,18 @@
 build/*
+!build/*.apk
 .cache/*
 compile-commands.json
+android_build.log
+# Python
+__pycache__/
+*.pyc
+# VSCode
+.vscode/
+# OS
+.DS_Store
+Thumbs.db
+# Keystore
+*.keystore
+# Misc
+*.swp
+*.swo
