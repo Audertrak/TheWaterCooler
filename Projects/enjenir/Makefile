@@ -102,25 +102,106 @@ EMCC_LDFLAGS = --shell-file web/minshell.html \
 RELEASE_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -O3 -flto -DNDEBUG
 DEBUG_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -g -DDEBUG
 
-all: release debug web copy-assets-native
-release: $(RELEASE_EXE) copy-assets-native
-debug: $(DEBUG_EXE) copy-assets-native
-web: $(WEB_APP_HTML_FILE) 
+# Test build directory
+TEST_BUILD_DIR = $(NATIVE_BUILD_DIR)/tests
 
-$(NATIVE_BUILD_DIR):
-	@mkdir -p $(NATIVE_BUILD_DIR)
-$(NATIVE_BUILD_DIR)/release: | $(NATIVE_BUILD_DIR)
-	@mkdir -p $(NATIVE_BUILD_DIR)/release
-$(NATIVE_BUILD_DIR)/debug: | $(NATIVE_BUILD_DIR)
-	@mkdir -p $(NATIVE_BUILD_DIR)/debug
-$(WASM_LOGIC_BUILD_DIR):
-	@mkdir -p $(WASM_LOGIC_BUILD_DIR)
-$(WEB_APP_BUILD_DIR):
-	@mkdir -p $(WEB_APP_BUILD_DIR)
+# Test sources
+TEST_DIR = testing
+TEST_SRCS = $(TEST_DIR)/test_harness.c \
+			$(TEST_DIR)/test_logic_gates.c \
+			$(TEST_DIR)/test_components.c \
+			$(TEST_DIR)/test_nodes.c \
+			$(TEST_DIR)/test_modules.c \
+			$(TEST_DIR)/test_actions.c \
+			$(TEST_DIR)/test_scenarios.c
 
+# Test object files are placed in TEST_BUILD_DIR
+TEST_OBJS = $(patsubst $(TEST_DIR)/%.c,$(TEST_BUILD_DIR)/%.o,$(TEST_SRCS))
+TEST_HARNESS_OBJ = $(TEST_BUILD_DIR)/test_harness.o
+TEST_LOGIC_GATES_OBJ = $(TEST_BUILD_DIR)/test_logic_gates.o
+TEST_COMPONENTS_OBJ = $(TEST_BUILD_DIR)/test_components.o
+TEST_NODES_OBJ = $(TEST_BUILD_DIR)/test_nodes.o
+TEST_MODULES_OBJ = $(TEST_BUILD_DIR)/test_modules.o
+TEST_ACTIONS_OBJ = $(TEST_BUILD_DIR)/test_actions.o
+TEST_SCENARIOS_OBJ = $(TEST_BUILD_DIR)/test_scenarios.o
+
+# Test executables
+TEST_BINS = $(TEST_BUILD_DIR)/test_logic_gates.exe \
+            $(TEST_BUILD_DIR)/test_components.exe \
+            $(TEST_BUILD_DIR)/test_nodes.exe \
+            $(TEST_BUILD_DIR)/test_modules.exe \
+            $(TEST_BUILD_DIR)/test_actions.exe \
+            $(TEST_BUILD_DIR)/test_scenarios.exe
+
+# Server object file (debug version) used by tests
+SERVER_OBJ_DEBUG = $(NATIVE_BUILD_DIR)/debug/server.o
+
+# Main application object files
 APP_OBJS_NATIVE_RELEASE = $(patsubst src/%.c,$(NATIVE_BUILD_DIR)/release/%.o,$(APP_C_FILES_NATIVE))
 APP_OBJS_NATIVE_DEBUG = $(patsubst src/%.c,$(NATIVE_BUILD_DIR)/debug/%.o,$(APP_C_FILES_NATIVE))
 
+# Default target
+all:
+	$(MAKE) test && \
+	$(MAKE) release && \
+	$(MAKE) debug && \
+	$(MAKE) web && \
+	$(MAKE) copy-assets-native
+
+# Build all test object files before linking test executables
+$(TEST_OBJS): | $(TEST_BUILD_DIR) $(NATIVE_BUILD_DIR)/debug
+
+# Rule for compiling test source files from $(TEST_DIR)/ into $(TEST_BUILD_DIR)/
+# Example: build/native/tests/test_harness.o from testing/test_harness.c
+$(TEST_BUILD_DIR)/%.o: $(TEST_DIR)/%.c | $(TEST_BUILD_DIR) $(NATIVE_BUILD_DIR)/debug
+	@echo "Compiling Test Object: $< -> $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) -c $< -o $@
+
+# Rules for linking test executables
+$(TEST_BUILD_DIR)/test_logic_gates.exe: $(TEST_HARNESS_OBJ) $(TEST_LOGIC_GATES_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+$(TEST_BUILD_DIR)/test_components.exe: $(TEST_HARNESS_OBJ) $(TEST_COMPONENTS_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+$(TEST_BUILD_DIR)/test_nodes.exe: $(TEST_HARNESS_OBJ) $(TEST_NODES_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+$(TEST_BUILD_DIR)/test_modules.exe: $(TEST_HARNESS_OBJ) $(TEST_MODULES_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+$(TEST_BUILD_DIR)/test_actions.exe: $(TEST_HARNESS_OBJ) $(TEST_ACTIONS_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+$(TEST_BUILD_DIR)/test_scenarios.exe: $(TEST_HARNESS_OBJ) $(TEST_SCENARIOS_OBJ) $(SERVER_OBJ_DEBUG)
+	@echo "Linking Test: $@"
+	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) $^ $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+
+test: $(TEST_BINS)
+	@echo "Running logic gate tests..."
+	@$(TEST_BUILD_DIR)/test_logic_gates.exe
+	@echo "Running component tests..."
+	@$(TEST_BUILD_DIR)/test_components.exe
+	@echo "Running node tests..."
+	@$(TEST_BUILD_DIR)/test_nodes.exe
+	@echo "Running module tests..."
+	@$(TEST_BUILD_DIR)/test_modules.exe
+	@echo "Running action/effect tests..."
+	@$(TEST_BUILD_DIR)/test_actions.exe
+	@echo "Running scenario tests..."
+	@$(TEST_BUILD_DIR)/test_scenarios.exe
+
+# Ensure test build directory exists
+$(TEST_BUILD_DIR): | $(NATIVE_BUILD_DIR)
+	@mkdir -p $(TEST_BUILD_DIR)
+
+# Rule for compiling native source files from src/ into NATIVE_BUILD_DIR
+# Example: build/native/release/main.o from src/main.c
 $(NATIVE_BUILD_DIR)/release/%.o: src/%.c | $(NATIVE_BUILD_DIR)/release
 	@echo "Compiling Native (Release): $< -> $@"
 	$(NATIVE_CC) $(RELEASE_CFLAGS_NATIVE) -c $< -o $@
@@ -129,6 +210,23 @@ $(NATIVE_BUILD_DIR)/debug/%.o: src/%.c | $(NATIVE_BUILD_DIR)/debug
 	@echo "Compiling Native (Debug): $< -> $@"
 	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) -c $< -o $@
 
+# Ensure release and debug directories exist
+$(NATIVE_BUILD_DIR)/release:
+	@mkdir -p $(NATIVE_BUILD_DIR)/release
+
+$(NATIVE_BUILD_DIR)/debug:
+	@mkdir -p $(NATIVE_BUILD_DIR)/debug
+
+# Build targets for main application
+release: $(APP_OBJS_NATIVE_RELEASE) $(RELEASE_EXE)
+
+debug: $(APP_OBJS_NATIVE_DEBUG) $(DEBUG_EXE)
+
+# Rules for application object files
+$(APP_OBJS_NATIVE_RELEASE): | $(NATIVE_BUILD_DIR)/release
+$(APP_OBJS_NATIVE_DEBUG): | $(NATIVE_BUILD_DIR)/debug
+
+# Main application executables
 $(RELEASE_EXE): $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_LIB_FILE_NATIVE)
 	@echo "Linking Native (Release): $@"
 	$(NATIVE_CC) $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_RELEASE) -o $@
@@ -173,5 +271,8 @@ serve-web: web
 	@echo "Serving web build from $(WEB_APP_BUILD_DIR) on http://localhost:8000"
 	@cd $(WEB_APP_BUILD_DIR) && python3 -m http.server 8000
 
-.PHONY: all clean release debug web wasm_logic run-release run-debug compile_commands copy-assets-native $(RAYLIB_NATIVE_LIB_FILE)
+$(NATIVE_BUILD_DIR):
+	@mkdir -p $(NATIVE_BUILD_DIR)
+
+.PHONY: all clean release debug web wasm_logic run-release run-debug compile_commands copy-assets-native test
 

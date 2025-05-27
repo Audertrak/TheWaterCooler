@@ -24,60 +24,75 @@ typedef struct Vector2 {
   #include "raymath.h"
 #endif
 
-#define MAX_COMPONENTS_ON_GRID                                               \
-    100    ///< Maximum number of components that can be placed on the grid.
-#define MAX_CARDS_IN_HAND         10    ///< Maximum number of cards a player can hold.
+#define MAX_ELEMENTS_ON_CANVAS                                               \
+    100    ///< Maximum number of elements that can be placed on the canvas.
+#define MAX_CARDS_IN_HAND         10    ///< Maximum number of cards a user can hold.
 #define MAX_CARDS_IN_DECK         60    ///< Maximum number of cards in a deck.
-#define MAX_INPUTS_PER_LOGIC_GATE 2     ///< Max inputs for simple gates like AND/OR
-#define MAX_OUTPUTS_PER_COMPONENT 1     // Most components have one output for now
-#define MAX_CONNECTIONS           MAX_COMPONENTS_ON_GRID *MAX_INPUTS_PER_LOGIC_GATE    // Theoretical max
+#define MAX_INPUTS_PER_LOGIC_GATE 5     ///< Max inputs for complex gates like MUX (5 inputs)
+#define MAX_OUTPUTS_PER_BUS       4     ///< Max outputs for bus element (quad output)
+#define MAX_CONNECTIONS           MAX_ELEMENTS_ON_CANVAS *MAX_INPUTS_PER_LOGIC_GATE    // Theoretical max
 
-// --- Component Definitions ---
-
-/**
- * @brief Defines the types of circuit components available in the game.
- */
-typedef enum ComponentType {
-    COMP_NONE = 0,            ///< No component / empty slot.
-    COMP_MOMENTARY_SWITCH,    ///< A switch that is active only while interacted
-                              ///< with.
-    COMP_LATCHING_SWITCH,     ///< A switch that toggles its state on interaction.
-    COMP_AND_GATE,            ///< A logical AND gate.
-    COMP_OR_GATE,             ///< A logical OR gate.
-    COMP_SOURCE,              ///< Global source, always outputs true.
-    COMP_SINK,                ///< Global sink, always outputs false.
-    COMP_TYPE_COUNT           ///< Total number of defined component types.
-} ComponentType;
+// --- Element Definitions ---
 
 /**
- * @brief Represents a single circuit component placed on the game grid.
+ * @brief Defines the types of circuit elements available in the simulator.
+ * Elements are categorized as components (simple input/output), nodes (processing), or modules (complex).
  */
-typedef struct CircuitComponent {
-    ComponentType type;                  ///< The type of this component.
-    Vector2       gridPosition;          ///< Logical (column, row) position on the grid.
-    bool          outputState;           ///< Current boolean output state of the component.
-    bool          defaultOutputState;    ///< Default output state, primarily for switches.
-    bool          isActive;              ///< True if this component slot is in use on the grid.
-    int           id;                    ///< Unique identifier for this component instance.
-    int           inputComponentIDs[MAX_INPUTS_PER_LOGIC_GATE];    ///< IDs of components
-                                                                   ///< providing input. -1 if
-                                                                   ///< not connected.
-    bool          actualInputStates[MAX_INPUTS_PER_LOGIC_GATE];    ///< The actual boolean
-                                                                   ///< state received from
-                                                                   ///< inputComponentIDs.
-    int           connectedInputCount;                             ///< Number of connected inputs
+typedef enum ElementType {
+    ELEMENT_NONE = 0,         ///< No element / empty slot.
+    
+    // Basic Components (origin or terminal points)
+    ELEMENT_SOURCE,           ///< Single output, always outputs signal.
+    ELEMENT_BUTTON,           ///< Single output, outputs signal when clicked.
+    ELEMENT_SWITCH,           ///< Single output, toggled by user.
+    ELEMENT_SENSOR,           ///< Single input, triggered by signal, adds to capability.
+    
+    // Advanced Components
+    ELEMENT_SEQUENCER,        ///< Single input, user-editable sequence, plays back on signal.
+    
+    // Basic Nodes (input and output processing)
+    ELEMENT_NOT,              ///< Single input/output, inverts signal.
+    ELEMENT_AND,              ///< Double input, single output, outputs if both inputs active.
+    ELEMENT_OR,               ///< Double input, single output, outputs if any input active.
+    ELEMENT_BUS,              ///< Single input, quad output, repeats input signal.
+    
+    // Advanced Nodes
+    ELEMENT_FLIP_FLOP,        ///< Single input/output, toggles state on signal.
+    ELEMENT_MUX,              ///< 5 inputs, single output, one input is "select".
+    ELEMENT_TAPE,             ///< Like sequencer, but single input/output.
+    
+    ELEMENT_TYPE_COUNT        ///< Total number of defined element types.
+} ElementType;
+
+/**
+ * @brief Represents a single circuit element placed on the simulator canvas.
+ */
+typedef struct CircuitElement {
+    ElementType type;                    ///< The type of this element.
+    Vector2     canvasPosition;          ///< Logical (x, y) position on the canvas.
+    bool        outputState;             ///< Current boolean output state of the element.
+    bool        defaultOutputState;      ///< Default output state, primarily for switches.
+    bool        isActive;                ///< True if this element slot is in use on the canvas.
+    int         id;                      ///< Unique identifier for this element instance.
+    int         inputElementIDs[MAX_INPUTS_PER_LOGIC_GATE];    ///< IDs of elements
+                                                               ///< providing input. -1 if
+                                                               ///< not connected.
+    bool        actualInputStates[MAX_INPUTS_PER_LOGIC_GATE];  ///< The actual boolean
+                                                               ///< state received from
+                                                               ///< inputElementIDs.
+    int         connectedInputCount;                           ///< Number of connected inputs
     // float timer;             ///< General purpose timer (seconds)
     // bool timerActive;        ///< Whether the timer is currently running
     // float timerDuration;     ///< How long the timer should run (seconds)
-} CircuitComponent;
+} CircuitElement;
 
 /**
- * @brief Represents a connection between two components.
+ * @brief Represents a connection between two elements.
  */
 typedef struct Connection {
-    int  fromComponentId;    ///< ID of the component outputting the signal.
-    int  toComponentId;      ///< ID of the component receiving the signal.
-    int  toInputSlot;        ///< Which input slot on the toComponent (0, 1, etc.).
+    int  fromElementId;      ///< ID of the element outputting the signal.
+    int  toElementId;        ///< ID of the element receiving the signal.
+    int  toInputSlot;        ///< Which input slot on the toElement (0, 1, etc.).
     bool isActive;           ///< Is this connection slot in use?
 } Connection;
 
@@ -85,8 +100,8 @@ typedef struct Connection {
  * @brief Defines different types of scenario conditions that can be checked.
  */
 typedef enum ScenarioConditionType {
-    CONDITION_MIN_COMPONENTS = 0,    ///< Minimum number of specific component types
-    CONDITION_MAX_COMPONENTS,        ///< Maximum number of specific component types
+    CONDITION_MIN_ELEMENTS = 0,      ///< Minimum number of specific element types
+    CONDITION_MAX_ELEMENTS,          ///< Maximum number of specific element types
     CONDITION_MIN_UNIQUE_STATES,     ///< Minimum number of unique output states
     CONDITION_MAX_UNIQUE_STATES,     ///< Maximum number of unique output states
     CONDITION_SPECIFIC_STATE,        ///< Require a specific output state pattern
@@ -97,7 +112,7 @@ typedef enum ScenarioConditionType {
  * @brief Predefined scenario IDs for the progression system.
  */
 typedef enum ScenarioId {
-    SCENARIO_BASIC_CIRCUIT = 0,    ///< Tutorial: place basic components
+    SCENARIO_BASIC_CIRCUIT = 0,    ///< Tutorial: place basic elements
     SCENARIO_SIMPLE_LOGIC,         ///< Build a working AND gate circuit
     SCENARIO_TOGGLE_SWITCH,        ///< Create a toggle using latching switch
     SCENARIO_MULTI_INPUT,          ///< Use multiple inputs with OR gate
@@ -110,7 +125,7 @@ typedef enum ScenarioId {
  */
 typedef struct ScenarioCondition {
     ScenarioConditionType type;                ///< Type of condition to check
-    ComponentType         componentType;       ///< Component type for component-based conditions
+    ElementType           elementType;         ///< Element type for element-based conditions
     int                   targetValue;         ///< Target count or value for the condition
     bool                  isMet;               ///< Whether this condition is currently satisfied
     char                  description[128];    ///< Human-readable description of the condition
@@ -128,30 +143,31 @@ typedef struct Scenario {
     int               rewardScore;         ///< Score awarded for completing this scenario
 } Scenario;
 
-// --- Card Definitions ---
+// --- Card System Definitions ---
 
 /**
- * @brief Defines the general types of cards in the game.
+ * @brief Defines the types of cards available in the resource deck.
  */
 typedef enum CardType {
-    CARD_TYPE_OBJECT = 0,        ///< A card that places a CircuitComponent.
-    CARD_TYPE_ACTION,            ///< A card that performs an immediate action.
-    CARD_TYPE_EFFECT,            ///< A card that applies a lasting effect.
-    CARD_TYPE_DECK_MANAGEMENT    ///< A card that manipulates the deck or hand.
+    CARD_TYPE_ELEMENT = 0,    ///< Persistent element card (components, nodes, modules)
+    CARD_TYPE_ACTION,         ///< Consumable action/effect card
+    CARD_TYPE_COUNT           ///< Total number of card types
 } CardType;
 
 /**
- * @brief Defines specific action/effect card types available in the game.
+ * @brief Defines the specific action/effect types for action cards.
  */
 typedef enum ActionCardType {
-    ACTION_REQUISITION = 0,           ///< Draw 3 cards
-    ACTION_RECYCLE,                   ///< Discard any number of cards, draw that many
-    ACTION_RE_ORG,                    ///< Discard hand, draw to full hand
-    ACTION_JOB_FAIR,                  ///< Pick one of 3 cards to add permanently to deck
-    ACTION_CONTINUOUS_IMPROVEMENT,    ///< Add an input or output to an element
-    ACTION_END_OF_LIFE,               ///< Permanently remove a card from hand
-    ACTION_PARTS_BIN,                 ///< Copy an element currently in play
-    ACTION_TYPE_COUNT                 ///< Total number of action types
+    ACTION_REQUISITION = 0,         ///< Draw 3 cards
+    ACTION_RECYCLE,                 ///< Discard any number of cards, draw that many
+    ACTION_RE_ORG,                  ///< Discard hand, draw to full
+    ACTION_JOB_FAIR,                ///< Pick 1 of 3 resources to add to deck
+    ACTION_CONTINUOUS_IMPROVEMENT,  ///< Add input/output to element
+    ACTION_END_OF_LIFE,             ///< Remove a card from hand permanently
+    ACTION_PARTS_BIN,               ///< Duplicate an element in play
+    ACTION_BLUEPRINT,               ///< Copy and replay modules/nodes
+    ACTION_SCHEMATIC,               ///< Copy and replay modules/nodes
+    ACTION_TYPE_COUNT               ///< Total number of action types
 } ActionCardType;
 
 /**
@@ -161,87 +177,87 @@ typedef struct Card {
     CardType       type;                ///< The general type of this card.
     char           name[64];            ///< Display name of the card.
     char           description[128];    ///< Flavor text or rules text for the card.
-    ComponentType  objectToPlace;       ///< If CARD_TYPE_OBJECT, the ComponentType it places.
+    ElementType    elementToPlace;      ///< If CARD_TYPE_ELEMENT, the ElementType it places.
     int            id;                  ///< Unique identifier for this card definition.
     ActionCardType actionType;          ///< If CARD_TYPE_ACTION, the specific action it performs
 } Card;
 
 /**
- * @brief Holds the entire state of the game logic.
+ * @brief Holds the entire state of the simulator logic.
  * This structure is managed by the "server" module.
  */
-typedef struct GameState {
-    CircuitComponent componentsOnGrid[MAX_COMPONENTS_ON_GRID];    ///< Array of all components on
-                                                                  ///< the grid.
-    int              componentCount;     ///< Number of active components currently on the grid.
-    int              nextComponentId;    ///< Counter for assigning unique IDs to new components.
+typedef struct SimulatorState {
+    CircuitElement   elementsOnCanvas[MAX_ELEMENTS_ON_CANVAS];    ///< Array of all elements on
+                                                                  ///< the canvas.
+    int              elementCount;       ///< Number of active elements currently on the canvas.
+    int              nextElementId;      ///< Counter for assigning unique IDs to new elements.
     Connection       connections[MAX_CONNECTIONS];     ///< Array of all connections.
     int              connectionCount;                  ///< Number of active connections.
-    Card             playerHand[MAX_CARDS_IN_HAND];    ///< Cards currently in the player's hand.
-    int              handCardCount;                    ///< Number of cards in the player's hand.
-    Card             playerDeck[MAX_CARDS_IN_DECK];    ///< Cards currently in the player's draw
+    Card             userHand[MAX_CARDS_IN_HAND];      ///< Cards currently in the user's hand.
+    int              handCardCount;                    ///< Number of cards in the user's hand.
+    Card             userDeck[MAX_CARDS_IN_DECK];      ///< Cards currently in the user's draw
                                                        ///< pile.
-    int              deckCardCount;       ///< Total number of cards currently in the draw pile.
-    int              currentDeckIndex;    ///< Index of the next card to be drawn from playerDeck.
-    Card             playerDiscard[MAX_CARDS_IN_DECK];    ///< Cards in the player's discard pile.
-    int              discardCardCount;                    ///< Number of cards in the discard pile.
-    int              score;                ///< Player's current score (example field).
-    bool             is_game_over;         ///< Flag indicating if the game has ended.
-    Scenario         currentScenario;      ///< The scenario the player is currently attempting
-    int              currentScenarioId;    ///< ID of the currently active scenario
+    int              deckCardCount;      ///< Total number of cards currently in the draw pile.
+    int              currentDeckIndex;   ///< Index of the next card to be drawn from userDeck.
+    Card             userDiscard[MAX_CARDS_IN_DECK];   ///< Cards in the user's discard pile.
+    int              discardCardCount;                 ///< Number of cards in the discard pile.
+    int              score;              ///< User's current score.
+    bool             simulationComplete; ///< Flag indicating if the simulation has ended.
+    Scenario         currentScenario;    ///< The scenario the user is currently working on
+    int              currentScenarioId;  ///< ID of the currently active scenario
     bool scenarioProgression[SCENARIO_COUNT];    ///< Track which scenarios have been completed
-} GameState;
+} SimulatorState;
 
 /**
- * @brief Initializes the game state to its starting conditions.
- * @param gameState Pointer to the GameState struct to be initialized.
+ * @brief Initializes the simulator state to its starting conditions.
+ * @param simulatorState Pointer to the SimulatorState struct to be initialized.
  */
-void Server_Init( GameState *gameState );
+void Server_Init( SimulatorState *simulatorState );
 
 /**
- * @brief Updates the game state based on elapsed time and internal logic.
- * @param gameState Pointer to the GameState struct to be updated.
+ * @brief Updates the simulator state based on elapsed time and internal logic.
+ * @param simulatorState Pointer to the SimulatorState struct to be updated.
  * @param deltaTime Time elapsed since the last frame, in seconds.
  */
-void Server_Update( GameState *gameState, float deltaTime );
+void Server_Update( SimulatorState *simulatorState, float deltaTime );
 
 /**
- * @brief Processes a card played from the player's hand.
+ * @brief Processes a card used from the user's hand.
  * Moves the card to the discard pile and updates hand/deck counts.
- * @param gameState Pointer to the GameState struct.
- * @param handIndex The index of the card in the player's hand to be played.
- * @return True if the card was successfully played, false otherwise.
+ * @param simulatorState Pointer to the SimulatorState struct.
+ * @param handIndex The index of the card in the user's hand to be used.
+ * @return True if the card was successfully used, false otherwise.
  */
-bool Server_PlayCardFromHand( GameState *gameState, int handIndex );
+bool Server_UseCardFromHand( SimulatorState *simulatorState, int handIndex );
 
 /**
- * @brief Handles player interaction with a component on the grid.
+ * @brief Handles user interaction with an element on the canvas.
  * For example, toggling a switch.
- * @param gameState Pointer to the GameState struct.
- * @param componentId The unique ID of the component to interact with.
+ * @param simulatorState Pointer to the SimulatorState struct.
+ * @param elementId The unique ID of the element to interact with.
  */
-void Server_InteractWithComponent( GameState *gameState, int componentId );
+void Server_InteractWithElement( SimulatorState *simulatorState, int elementId );
 
-void Server_ReleaseComponentInteraction( GameState *gameState, int componentId );
+void Server_ReleaseElementInteraction( SimulatorState *simulatorState, int elementId );
 
 /**
- * @brief Allows the player to attempt to draw a card from their deck.
+ * @brief Allows the user to attempt to draw a card from their deck.
  * If the deck is empty, it will attempt to reshuffle the discard pile.
- * @param gameState Pointer to the GameState struct.
+ * @param simulatorState Pointer to the SimulatorState struct.
  * @return True if a card was successfully drawn into the hand, false otherwise.
  */
-bool Server_PlayerDrawCard( GameState *gameState );
+bool Server_UserDrawCard( SimulatorState *simulatorState );
 
 /**
- * @brief Attempts to create a connection between two components.
- * @param gameState Pointer to the GameState.
- * @param fromComponentId ID of the source component.
- * @param toComponentId ID of the target component.
- * @param toInputSlot The input slot on the target component to connect to.
+ * @brief Attempts to create a connection between two elements.
+ * @param simulatorState Pointer to the SimulatorState.
+ * @param fromElementId ID of the source element.
+ * @param toElementId ID of the target element.
+ * @param toInputSlot The input slot on the target element to connect to.
  * @return True if the connection was successfully made, false otherwise.
  */
 bool Server_CreateConnection(
-  GameState *gameState, int fromComponentId, int toComponentId, int toInputSlot
+  SimulatorState *simulatorState, int fromElementId, int toElementId, int toInputSlot
 );
 
 /**
@@ -256,48 +272,48 @@ void Server_InitScenario( Scenario *scenario, const char *name, const char *desc
  * @brief Adds a condition to a scenario.
  * @param scenario Pointer to the scenario
  * @param type Type of condition to add
- * @param componentType Component type for component-based conditions (use COMP_NONE if not
+ * @param elementType Element type for element-based conditions (use ELEMENT_NONE if not
  * applicable)
  * @param targetValue Target value for the condition
  * @param description Human-readable description of the condition
  * @return True if condition was added successfully, false if scenario is full
  */
 bool Server_AddScenarioCondition(
-  Scenario *scenario, ScenarioConditionType type, ComponentType componentType, int targetValue,
+  Scenario *scenario, ScenarioConditionType type, ElementType elementType, int targetValue,
   const char *description
 );
 
 /**
  * @brief Evaluates all conditions in the current scenario and updates completion status.
- * @param gameState Pointer to the game state
+ * @param simulatorState Pointer to the simulator state
  */
-void Server_EvaluateScenario( GameState *gameState );
+void Server_EvaluateScenario( SimulatorState *simulatorState );
 
 /**
- * @brief Loads a predefined starter scenario for new players.
- * @param gameState Pointer to the game state
+ * @brief Loads a predefined starter scenario for new users.
+ * @param simulatorState Pointer to the simulator state
  */
-void Server_LoadStarterScenario( GameState *gameState );
+void Server_LoadStarterScenario( SimulatorState *simulatorState );
 
 /**
- * @brief Loads a specific scenario by ID into the game state.
- * @param gameState Pointer to the game state
+ * @brief Loads a specific scenario by ID into the simulator state.
+ * @param simulatorState Pointer to the simulator state
  * @param scenarioId The ID of the scenario to load
  */
-void Server_LoadScenario( GameState *gameState, ScenarioId scenarioId );
+void Server_LoadScenario( SimulatorState *simulatorState, ScenarioId scenarioId );
 
 /**
  * @brief Advances to the next scenario if the current one is completed.
- * @param gameState Pointer to the game state
+ * @param simulatorState Pointer to the simulator state
  * @return True if advanced to next scenario, false if no more scenarios or current not completed
  */
-bool Server_AdvanceToNextScenario( GameState *gameState );
+bool Server_AdvanceToNextScenario( SimulatorState *simulatorState );
 
 /**
- * @brief Resets the current scenario, clearing all placed components and restoring hand.
- * @param gameState Pointer to the game state
+ * @brief Resets the current scenario, clearing all placed elements and restoring hand.
+ * @param simulatorState Pointer to the simulator state
  */
-void Server_ResetCurrentScenario( GameState *gameState );
+void Server_ResetCurrentScenario( SimulatorState *simulatorState );
 
 /**
  * @brief Creates an action card with the specified type and properties.
@@ -310,10 +326,10 @@ Card Server_CreateActionCard( int id, const char *name, ActionCardType actionTyp
 
 /**
  * @brief Executes the effect of an action card.
- * @param gameState Pointer to the game state
+ * @param simulatorState Pointer to the simulator state
  * @param actionType The type of action to execute
  * @return True if the action was executed successfully, false otherwise
  */
-bool Server_ExecuteActionCard( GameState *gameState, ActionCardType actionType );
+bool Server_ExecuteActionCard( SimulatorState *simulatorState, ActionCardType actionType );
 
 #endif    // SERVER_H

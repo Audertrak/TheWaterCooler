@@ -1,11 +1,12 @@
 #include "client.h"
 #include "raylib.h"
 #include "server.h"
+#include "client.h"
 
 int main(void) {
-  GameState gameState;
+  SimulatorState simulatorState;
 
-  Server_Init(&gameState);
+  Server_Init(&simulatorState);
 
   if (!Client_Init()) {
     return 1;
@@ -14,11 +15,11 @@ int main(void) {
   while (!Client_ShouldClose()) {
     float deltaTime = GetFrameTime();
 
-    if (Client_GetCurrentScreen() == CLIENT_SCREEN_GAMEPLAY) {
-      Server_Update(&gameState, deltaTime);
+    if (Client_GetCurrentScreen() == CLIENT_SCREEN_SIMULATION) {
+      Server_Update(&simulatorState, deltaTime);
     }
 
-    Client_UpdateAndDraw(&gameState);
+    Client_UpdateAndDraw(&simulatorState);
   }
 
   Client_Close();

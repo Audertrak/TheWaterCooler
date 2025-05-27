@@ -23,21 +23,21 @@ static int                   framesCounter    = 0;
 static Camera2D              gameCamera;
 static int                   selectedCardIndex     = -1;
 static ClientInteractionMode interactionMode       = INTERACTION_MODE_NORMAL;
-static int                   wiringFromComponentId = -1;
-static int                   heldMomentarySwitchId = -1;
+static int                   wiringFromElementId = -1;
+static int                   heldButtonId = -1;
 static float                 handScrollOffset      = 0.0f;
 static bool                  turnInProgress        = true;
 static int                   actionsThisTurn       = 0;
 static const int             maxActionsPerTurn     = 3;
 
-static Rectangle            GetUIButtonBarRect(float screenWidth, float screenHeight);
-static bool                DrawUIButton(Rectangle rect, const char* label, Color bg, Color fg);
-static void               DrawTouchUIAndHandle(GameState* gameState);
+static Rectangle          GetUIButtonBarRect(float screenWidth, float screenHeight);
+static bool               DrawUIButton(Rectangle rect, const char* label, Color bg, Color fg);
+static void               DrawTouchUIAndHandle(SimulatorState* simulatorState);
 static void               DrawGameplayGrid(void);
-static void               DrawComponentsOnGrid(const GameState *gameState);
-static void               DrawConnections(const GameState *gameState);
-static void               DrawScenarioDetailsScreen(const GameState *gameState);
-static void               HandleGameplayInput(GameState *gameState);
+static void               DrawComponentsOnGrid(const SimulatorState *simulatorState);
+static void               DrawConnections(const SimulatorState *simulatorState);
+static void               DrawScenarioDetailsScreen(const SimulatorState *simulatorState);
+static void               HandleGameplayInput(SimulatorState *simulatorState);
 
 static Vector2               GetWorldPositionForGrid(Vector2 gridPos) {
   return (Vector2){gridPos.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f,
@@ -84,7 +84,7 @@ bool         Client_Init(void) {
   framesCounter         = 0;
   selectedCardIndex     = -1;
   interactionMode       = INTERACTION_MODE_NORMAL;
-  wiringFromComponentId = -1;
+  wiringFromElementId = -1;
   return true;
 }
 
@@ -157,46 +157,44 @@ static void DrawGameplayGrid(void) {
   for (int y = startY; y < endY; y += GRID_CELL_SIZE) { DrawLine(startX, y, endX, y, COLOR_GRID_LINES); }
 }
 
-static void DrawComponentsOnGrid(const GameState *gameState) {
-  if (gameState == NULL) return;
+static void DrawComponentsOnGrid(const SimulatorState *simulatorState) {
+  if (simulatorState == NULL) return;
 
-  for (int i = 0; i < gameState->componentCount; ++i) {
-    if (gameState->componentsOnGrid[i].isActive) {
-      CircuitComponent comp     = gameState->componentsOnGrid[i];
-      Vector2          worldPos = GetWorldPositionForGrid(comp.gridPosition);
+  for (int i = 0; i < simulatorState->elementCount; ++i) {
+    if (simulatorState->elementsOnCanvas[i].isActive) {
+      CircuitElement element = simulatorState->elementsOnCanvas[i];
+      Vector2 worldPos = GetWorldPositionForGrid(element.canvasPosition);
 
-      Rectangle        compRec  = {
+      Rectangle compRec = {
         worldPos.x - GRID_CELL_SIZE / 3.0f, worldPos.y - GRID_CELL_SIZE / 3.0f, GRID_CELL_SIZE * 2.0f / 3.0f,
         GRID_CELL_SIZE * 2.0f / 3.0f
       };
 
-      Color       compColor = COLOR_ACCENT_SECONDARY;
-      const char *compText  = "";
-
-      switch (comp.type) {
-        case COMP_MOMENTARY_SWITCH:
-          compColor = comp.outputState ? LIME : MAROON;
-          compText  = comp.outputState ? "MOM" : "mom";
+      Color compColor = COLOR_ACCENT_SECONDARY;
+      const char *compText = "";      switch (element.type) {
+        case ELEMENT_BUTTON:
+          compColor = element.outputState ? LIME : MAROON;
+          compText = element.outputState ? "MOM" : "mom";
           break;
-        case COMP_LATCHING_SWITCH:
-          compColor = comp.outputState ? GREEN : RED;
-          compText  = comp.outputState ? "ON" : "OFF";
+        case ELEMENT_SWITCH:
+          compColor = element.outputState ? GREEN : RED;
+          compText = element.outputState ? "ON" : "OFF";
           break;
-        case COMP_AND_GATE:
-          compColor = comp.outputState ? SKYBLUE : DARKBLUE;
-          compText  = "AND";
+        case ELEMENT_AND:
+          compColor = element.outputState ? SKYBLUE : DARKBLUE;
+          compText = "AND";
           break;
-        case COMP_OR_GATE:
-          compColor = comp.outputState ? PINK : PURPLE;
-          compText  = "OR";
+        case ELEMENT_OR:
+          compColor = element.outputState ? PINK : PURPLE;
+          compText = "OR";
           break;
-        case COMP_SOURCE:
+        case ELEMENT_SOURCE:
           compColor = GOLD;
-          compText  = "SRC";
+          compText = "SRC";
           break;
-        case COMP_SINK:
+        case ELEMENT_SENSOR:
           compColor = DARKBROWN;
-          compText  = "SNK";
+          compText = "SNK";
           break;
         default: compText = "???"; break;
       }
@@ -204,9 +202,9 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
       DrawRectangleLinesEx(compRec, 2, DARKGRAY);
 
       if (clientFont.texture.id > 0) {
-        float   compFontSize = 10;
-        float   compSpacing  = 1;
-        Vector2 textSize     = MeasureTextEx(clientFont, compText, compFontSize, compSpacing);
+        float compFontSize = 10;
+        float compSpacing = 1;
+        Vector2 textSize = MeasureTextEx(clientFont, compText, compFontSize, compSpacing);
         DrawTextEx(
           clientFont, compText,
           (Vector2){compRec.x + (compRec.width - textSize.x) / 2, compRec.y + (compRec.height - textSize.y) / 2},
@@ -217,26 +215,30 @@ static void DrawComponentsOnGrid(const GameState *gameState) {
   }
 }
 
-static void DrawConnections(const GameState *gameState) {
-  if (gameState == NULL) return;
-  for (int i = 0; i < gameState->connectionCount; ++i) {
-    if (gameState->connections[i].isActive) {
-      Connection              conn     = gameState->connections[i];
-      const CircuitComponent *fromComp = NULL; // Corrected to const
-      const CircuitComponent *toComp   = NULL; // Corrected to const
+static void DrawConnections(const SimulatorState *simulatorState) {
+  if (simulatorState == NULL) return;
+  for (int i = 0; i < simulatorState->connectionCount; ++i) {
+    if (simulatorState->connections[i].isActive) {
+      Connection conn = simulatorState->connections[i];
+      const CircuitElement *fromElement = NULL;
+      const CircuitElement *toElement = NULL;
 
-      for (int j = 0; j < gameState->componentCount; ++j) {
-        if (gameState->componentsOnGrid[j].isActive) {
-          if (gameState->componentsOnGrid[j].id == conn.fromComponentId) { fromComp = &gameState->componentsOnGrid[j]; }
-          if (gameState->componentsOnGrid[j].id == conn.toComponentId) { toComp = &gameState->componentsOnGrid[j]; }
+      for (int j = 0; j < simulatorState->elementCount; ++j) {
+        if (simulatorState->elementsOnCanvas[j].isActive) {
+          if (simulatorState->elementsOnCanvas[j].id == conn.fromElementId) { 
+            fromElement = &simulatorState->elementsOnCanvas[j]; 
+          }
+          if (simulatorState->elementsOnCanvas[j].id == conn.toElementId) { 
+            toElement = &simulatorState->elementsOnCanvas[j]; 
+          }
         }
       }
 
-      if (fromComp && toComp) {
-        Vector2 startPos = GetWorldPositionForGrid(fromComp->gridPosition);
-        Vector2 endPos   = GetWorldPositionForGrid(toComp->gridPosition);
+      if (fromElement && toElement) {
+        Vector2 startPos = GetWorldPositionForGrid(fromElement->canvasPosition);
+        Vector2 endPos = GetWorldPositionForGrid(toElement->canvasPosition);
         STUB(
-          "For components with multiple inputs/outputs, adjust start/end "
+          "For elements with multiple inputs/outputs, adjust start/end "
           "points. For now, connect centers."
         );
         DrawLineEx(startPos, endPos, 2.0f, COLOR_TEXT_PRIMARY);
@@ -245,7 +247,7 @@ static void DrawConnections(const GameState *gameState) {
   }
 }
 
-static void DrawScenarioDetailsScreen(const GameState *gameState) {
+static void DrawScenarioDetailsScreen(const SimulatorState *simulatorState) {
   ClearBackground(COLOR_BACKGROUND);
   float       currentScreenWidth  = (float)GetScreenWidth();
   float       currentScreenHeight = (float)GetScreenHeight();
@@ -253,11 +255,11 @@ static void DrawScenarioDetailsScreen(const GameState *gameState) {
   float closeBtnW = 100, closeBtnH = 36;
   Rectangle closeBtn = {currentScreenWidth - closeBtnW - UI_PADDING, UI_PADDING, closeBtnW, closeBtnH};
   if (DrawUIButton(closeBtn, "Return", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
-    currentClientScreen = CLIENT_SCREEN_GAMEPLAY;
-    TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Gameplay");
+    currentClientScreen = CLIENT_SCREEN_SIMULATION;
+    TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Simulation");
   }
 
-  const char *title               = TextFormat("Details for Scenario: %s", gameState->currentScenario.name);
+  const char *title               = TextFormat("Details for Scenario: %s", simulatorState->currentScenario.name);
   Vector2     titleSize           = MeasureTextEx(clientFont, title, 30, 2);
   DrawTextEx(
     clientFont, title, (Vector2){(currentScreenWidth - titleSize.x) / 2, UI_PADDING * 2}, 30, 2, COLOR_TEXT_PRIMARY
@@ -332,7 +334,7 @@ static void DrawScenarioDetailsScreen(const GameState *gameState) {
   );
 }
 
-static void DrawGameplayScreen(const GameState *gameState) {
+static void DrawGameplayScreen(const SimulatorState *simulatorState) {
   float     currentScreenWidth  = (float)GetScreenWidth();
   float     currentScreenHeight = (float)GetScreenHeight();
 
@@ -343,23 +345,21 @@ static void DrawGameplayScreen(const GameState *gameState) {
   };
 
   gameCamera.offset = (Vector2){playArea.x + playArea.width / 2.0f, playArea.y + playArea.height / 2.0f};
-
   BeginScissorMode((int)playArea.x, (int)playArea.y, (int)playArea.width, (int)playArea.height);
   BeginMode2D(gameCamera);
   DrawGameplayGrid();
-  DrawComponentsOnGrid(gameState);
-  DrawConnections(gameState);
-
-  if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT && wiringFromComponentId != -1) {
-    const CircuitComponent *fromComp = NULL; // Corrected to const
-    for (int i = 0; i < gameState->componentCount; ++i) {
-      if (gameState->componentsOnGrid[i].id == wiringFromComponentId) {
-        fromComp = &gameState->componentsOnGrid[i];
+  DrawComponentsOnGrid(simulatorState);
+  DrawConnections(simulatorState);
+  if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT && wiringFromElementId != -1) {
+    const CircuitElement *fromElement = NULL;
+    for (int i = 0; i < simulatorState->elementCount; ++i) {
+      if (simulatorState->elementsOnCanvas[i].id == wiringFromElementId) {
+        fromElement = &simulatorState->elementsOnCanvas[i];
         break;
       }
     }
-    if (fromComp) {
-      Vector2 startPos      = GetWorldPositionForGrid(fromComp->gridPosition);
+    if (fromElement) {
+      Vector2 startPos = GetWorldPositionForGrid(fromElement->canvasPosition);
       Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), gameCamera);
       DrawLineEx(startPos, mouseWorldPos, 2.0f, Fade(COLOR_ACCENT_PRIMARY, 0.7f));
     }
@@ -372,19 +372,18 @@ static void DrawGameplayScreen(const GameState *gameState) {
   float headerTextY       = headerArea.y + UI_PADDING;
   float scenarioNameSize  = 20;
   float conditionSize     = 14;
-  float statusTextSizeVal = 18;
-  DrawTextEx(
-    clientFont, TextFormat("Scenario: %s", gameState->currentScenario.name),
+  float statusTextSizeVal = 18;  DrawTextEx(
+    clientFont, TextFormat("Scenario: %s", simulatorState->currentScenario.name),
     (Vector2){headerArea.x + UI_PADDING, headerTextY}, scenarioNameSize, 2, COLOR_TEXT_PRIMARY
   );
 
-  if (gameState->currentScenario.isCompleted) {
+  if (simulatorState->currentScenario.isCompleted) {
     DrawTextEx(clientFont, "COMPLETED!", (Vector2){headerArea.x + 400, headerTextY}, scenarioNameSize, 2, GREEN);
   }
 
   const char *statusText = TextFormat(
-    "Deck: %d | Discard: %d | Turn: %s | Actions: %d/%d", gameState->deckCardCount - gameState->currentDeckIndex,
-    gameState->discardCardCount, turnInProgress ? "Active" : "Ended", actionsThisTurn, maxActionsPerTurn
+    "Deck: %d | Discard: %d | Turn: %s | Actions: %d/%d", simulatorState->deckCardCount - simulatorState->currentDeckIndex,
+    simulatorState->discardCardCount, turnInProgress ? "Active" : "Ended", actionsThisTurn, maxActionsPerTurn
   );
   Vector2 statusTextDimensions = MeasureTextEx(clientFont, statusText, statusTextSizeVal, 1);
   DrawTextEx(
@@ -393,13 +392,12 @@ static void DrawGameplayScreen(const GameState *gameState) {
               headerArea.y + (UI_HEADER_HEIGHT - statusTextDimensions.y) / 2.0f},
     statusTextSizeVal, 1, COLOR_TEXT_SECONDARY
   );
-
   float conditionsStartX = headerArea.x + UI_PADDING;
   float conditionsStartY =
-    headerTextY + scenarioNameSize + (gameState->currentScenario.isCompleted ? scenarioNameSize + 4 : 5);
-  for (int i = 0; i < gameState->currentScenario.conditionCount; ++i) {
+    headerTextY + scenarioNameSize + (simulatorState->currentScenario.isCompleted ? scenarioNameSize + 4 : 5);
+  for (int i = 0; i < simulatorState->currentScenario.conditionCount; ++i) {
     if (conditionsStartY + (i * (conditionSize + 2)) + conditionSize < headerArea.y + UI_HEADER_HEIGHT - UI_PADDING) {
-      ScenarioCondition condition      = gameState->currentScenario.conditions[i];
+      ScenarioCondition condition      = simulatorState->currentScenario.conditions[i];
       Color             conditionColor = condition.isMet ? GREEN : COLOR_TEXT_SECONDARY;
       const char       *statusIcon     = condition.isMet ? "[X]" : "[ ]";
 
@@ -414,13 +412,12 @@ static void DrawGameplayScreen(const GameState *gameState) {
   float detailsButtonHeight = 25;
   float detailsButtonX =
     headerArea.x + UI_PADDING +
-    MeasureTextEx(clientFont, TextFormat("Scenario: %s", gameState->currentScenario.name), scenarioNameSize, 2).x + 20;
+    MeasureTextEx(clientFont, TextFormat("Scenario: %s", simulatorState->currentScenario.name), scenarioNameSize, 2).x + 20;
 
   if (detailsButtonX + detailsButtonWidth >
-      currentScreenWidth - MeasureTextEx(clientFont, statusText, statusTextSizeVal, 1).x - UI_PADDING - 10) {
-    detailsButtonX =
+      currentScreenWidth - MeasureTextEx(clientFont, statusText, statusTextSizeVal, 1).x - UI_PADDING - 10) {    detailsButtonX =
       headerArea.x + UI_PADDING +
-      MeasureTextEx(clientFont, TextFormat("Scenario: %s", gameState->currentScenario.name), scenarioNameSize, 2).x +
+      MeasureTextEx(clientFont, TextFormat("Scenario: %s", simulatorState->currentScenario.name), scenarioNameSize, 2).x +
       20;
     if (detailsButtonX + detailsButtonWidth > currentScreenWidth / 1.5f) { detailsButtonX = currentScreenWidth / 2.0f; }
   }
@@ -451,13 +448,12 @@ static void DrawGameplayScreen(const GameState *gameState) {
 
   float currentCardX = deckArea.x + UI_PADDING - handScrollOffset;
   float handLabelY   = deckArea.y + UI_PADDING;
-
   DrawTextEx(
-    clientFont, TextFormat("Hand (%d/%d):", gameState->handCardCount, MAX_CARDS_IN_HAND),
+    clientFont, TextFormat("Hand (%d/%d):", simulatorState->handCardCount, MAX_CARDS_IN_HAND),
     (Vector2){deckArea.x + UI_PADDING, handLabelY}, 20, 1, COLOR_TEXT_PRIMARY
   );
 
-  const char *handLabelText      = TextFormat("Hand (%d/%d):", gameState->handCardCount, MAX_CARDS_IN_HAND);
+  const char *handLabelText      = TextFormat("Hand (%d/%d):", simulatorState->handCardCount, MAX_CARDS_IN_HAND);
   Vector2     handLabelSize      = MeasureTextEx(clientFont, handLabelText, 20, 1);
   float       handLabelTextWidth = handLabelSize.x;
 
@@ -467,10 +463,9 @@ static void DrawGameplayScreen(const GameState *gameState) {
     DrawTextEx(
       clientFont, "WIRING: Select Output", (Vector2){deckArea.x + UI_PADDING + handLabelTextWidth + 10, handLabelY}, 20,
       1, COLOR_ACCENT_PRIMARY
-    );
-  } else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
+    );  } else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
     DrawTextEx(
-      clientFont, TextFormat("WIRING: From %d, Select Input", wiringFromComponentId),
+      clientFont, TextFormat("WIRING: From %d, Select Input", wiringFromElementId),
       (Vector2){deckArea.x + UI_PADDING + handLabelTextWidth + 10, handLabelY}, 20, 1, COLOR_ACCENT_PRIMARY
     );
   }
@@ -484,15 +479,14 @@ static void DrawGameplayScreen(const GameState *gameState) {
   BeginScissorMode(
     (int)deckArea.x, (int)cardAreaY, (int)deckArea.width, (int)(deckArea.height - (cardAreaY - deckArea.y))
   );
-
-  for (int i = 0; i < gameState->handCardCount; ++i) {
+  for (int i = 0; i < simulatorState->handCardCount; ++i) {
     Rectangle cardRect = {currentCardX, cardAreaY, CARD_WIDTH, CARD_HEIGHT};
 
     if (cardRect.x + cardRect.width > deckArea.x && cardRect.x < deckArea.x + deckArea.width) {
       Color cardBorderColor = COLOR_CARD_BORDER;
       Color cardBgColor     = COLOR_CARD_BG;
 
-      if (gameState->playerHand[i].type == CARD_TYPE_ACTION) {
+      if (simulatorState->userHand[i].type == CARD_TYPE_ACTION) {
         cardBgColor     = Fade(YELLOW, 0.3f);
         cardBorderColor = ORANGE;
       } else if (i == selectedCardIndex) {
@@ -506,9 +500,9 @@ static void DrawGameplayScreen(const GameState *gameState) {
         cardRect.x + CARD_PADDING, cardRect.y + CARD_PADDING, cardRect.width - 2 * CARD_PADDING,
         cardRect.height - 2 * CARD_PADDING
       };
-      GuiLabel(cardTextRect, gameState->playerHand[i].name);
+      GuiLabel(cardTextRect, simulatorState->userHand[i].name);
 
-      if (gameState->playerHand[i].type == CARD_TYPE_ACTION) {
+      if (simulatorState->userHand[i].type == CARD_TYPE_ACTION) {
         Rectangle actionLabelRect = {
           cardRect.x + CARD_PADDING, cardRect.y + cardRect.height - 20, cardRect.width - 2 * CARD_PADDING, 15
         };
@@ -525,9 +519,8 @@ static void DrawGameplayScreen(const GameState *gameState) {
   EndScissorMode();
   GuiSetStyle(LABEL, TEXT_SIZE, previousLabelTextSize);
   GuiSetStyle(LABEL, TEXT_ALIGNMENT, previousLabelAlignment);
-
-  if (gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
-    float maxScroll = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING) +
+  if (simulatorState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+    float maxScroll = (simulatorState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING) +
                       CARD_SPACING; // Added some padding
     DrawTextEx(
       clientFont, "<", (Vector2){deckArea.x + UI_PADDING, cardAreaY - 20 - UI_PADDING}, 20, 1,
@@ -547,9 +540,8 @@ static void DrawGameplayScreen(const GameState *gameState) {
     scoreZoomTargetX = playArea.x + playArea.width - 200;
   }
   if (scoreZoomTargetX < UI_PADDING) scoreZoomTargetX = UI_PADDING;
-
   DrawTextEx(
-    clientFont, TextFormat("Score: %d", gameState->score), (Vector2){scoreZoomTargetX, UI_HEADER_HEIGHT + UI_PADDING},
+    clientFont, TextFormat("Score: %d", simulatorState->score), (Vector2){scoreZoomTargetX, UI_HEADER_HEIGHT + UI_PADDING},
     20, 1, COLOR_TEXT_PRIMARY
   );
   DrawTextEx(
@@ -562,46 +554,45 @@ static void DrawGameplayScreen(const GameState *gameState) {
   );
 }
 
-static void HandleGameplayInput(GameState *gameState) {
+static void HandleGameplayInput(SimulatorState *simulatorState) {
   if (IsKeyPressed(KEY_ESCAPE)) {
     currentClientScreen = CLIENT_SCREEN_TITLE;
     interactionMode = INTERACTION_MODE_NORMAL;
-    wiringFromComponentId = -1;
+    wiringFromElementId = -1;
     selectedCardIndex = -1;
-    heldMomentarySwitchId = -1;
+    heldButtonId = -1;
     gameplayHasLoggedEntry = false;
-    TraceLog(LOG_INFO, "CLIENT: Returning to Title Screen from Gameplay.");
+    TraceLog(LOG_INFO, "CLIENT: Returning to Title Screen from Simulation.");
     return;
   }
 
-  if (!gameplayHasLoggedEntry && gameState != NULL) {
+  if (!gameplayHasLoggedEntry && simulatorState != NULL) {
     TraceLog(
       LOG_INFO,
-      "CLIENT_GAMEPLAY_START: Score: %d, DeckCount: %d, "
+      "CLIENT_SIMULATION_START: Score: %d, DeckCount: %d, "
       "CurrentDeckIdx: %d, HandCount: %d, DiscardCount: %d",
-      gameState->score, gameState->deckCardCount, gameState->currentDeckIndex, gameState->handCardCount,
-      gameState->discardCardCount
+      simulatorState->score, simulatorState->deckCardCount, simulatorState->currentDeckIndex, simulatorState->handCardCount,
+      simulatorState->discardCardCount
     );
     gameplayHasLoggedEntry = true;
   }
 
   if (IsKeyPressed(KEY_D)) {
-    if (Server_PlayerDrawCard(gameState)) {
-      TraceLog(LOG_INFO, "CLIENT: Player attempted to draw a card. Hand size now: %d", gameState->handCardCount);
+    if (Server_UserDrawCard(simulatorState)) {
+      TraceLog(LOG_INFO, "CLIENT: User attempted to draw a card. Hand size now: %d", simulatorState->handCardCount);
     } else {
-      TraceLog(LOG_INFO, "CLIENT: Player tried to draw, but couldn't (hand full or no cards left).");
+      TraceLog(LOG_INFO, "CLIENT: User tried to draw, but couldn't (hand full or no cards left).");
     }
   }
-
   if (IsKeyPressed(KEY_W)) {
     if (interactionMode == INTERACTION_MODE_NORMAL) {
       interactionMode       = INTERACTION_MODE_WIRING_SELECT_OUTPUT;
       selectedCardIndex     = -1;
-      heldMomentarySwitchId = -1;
+      heldButtonId = -1;
       TraceLog(LOG_INFO, "CLIENT: Entered Wiring Mode - Select Output.");
     } else {
       interactionMode       = INTERACTION_MODE_NORMAL;
-      wiringFromComponentId = -1;
+      wiringFromElementId = -1;
       TraceLog(LOG_INFO, "CLIENT: Exited Wiring Mode.");
     }
   }
@@ -613,7 +604,6 @@ static void HandleGameplayInput(GameState *gameState) {
     0, (float)GetScreenHeight() - UI_DECK_AREA_HEIGHT, (float)GetScreenWidth(), UI_DECK_AREA_HEIGHT
   };  Vector2 mousePosition = GetMousePosition();
 
-  // Handle camera controls (mouse only for precise control)
   if (CheckCollisionPointRec(mousePosition, playArea)) {
     if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
       Vector2 delta     = GetMouseDelta();
@@ -630,32 +620,30 @@ static void HandleGameplayInput(GameState *gameState) {
       gameCamera.target =
         Vector2Add(gameCamera.target, Vector2Subtract(mouseWorldPosBeforeZoom, mouseWorldPosAfterZoom));
     }
-  }
-
-  // Handle hand scrolling (mouse wheel or touch gestures)
-  if (CheckCollisionPointRec(mousePosition, deckArea) && gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+  } 
+  
+  if (CheckCollisionPointRec(mousePosition, deckArea) && simulatorState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
     float wheel = GetMouseWheelMove();
     if (wheel != 0) {
-      float maxScroll   = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
+      float maxScroll   = (simulatorState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
       handScrollOffset -= wheel * HAND_SCROLL_SPEED * GetFrameTime();
       if (handScrollOffset < 0) handScrollOffset = 0;
       if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
     }
   }
 
-  // Handle touch gestures for hand scrolling
   static Vector2 lastTouchPos = {0};
   static bool touchScrolling = false;
   
   if (GetTouchPointCount() > 0) {
     Vector2 currentTouchPos = GetTouchPosition(0);
-    if (CheckCollisionPointRec(currentTouchPos, deckArea) && gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+    if (CheckCollisionPointRec(currentTouchPos, deckArea) && simulatorState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
       if (!touchScrolling) {
         lastTouchPos = currentTouchPos;
         touchScrolling = true;
       } else {
         float deltaX = currentTouchPos.x - lastTouchPos.x;
-        float maxScroll = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
+        float maxScroll = (simulatorState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
         handScrollOffset -= deltaX;
         if (handScrollOffset < 0) handScrollOffset = 0;
         if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
@@ -676,11 +664,10 @@ static void HandleGameplayInput(GameState *gameState) {
       handScrollOffset = 0.0f;
       TraceLog(LOG_INFO, "CLIENT: Ended turn");
     }
-  }  // Handle both mouse and touch input
-  bool leftInputPressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || 
+  }  bool leftInputPressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || 
                          (GetTouchPointCount() > 0 && GetTouchPointCount() == 1);
   bool leftInputReleased = IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || 
-                          (GetTouchPointCount() == 0 && heldMomentarySwitchId != -1);
+                          (GetTouchPointCount() == 0 && heldButtonId != -1 && !IsMouseButtonDown(MOUSE_BUTTON_LEFT));
   
   Vector2 inputPosition = GetTouchPointCount() > 0 ? GetTouchPosition(0) : GetMousePosition();
   
@@ -693,20 +680,18 @@ static void HandleGameplayInput(GameState *gameState) {
       0, (float)GetScreenHeight() - UI_DECK_AREA_HEIGHT,
       (float)GetScreenWidth(), UI_DECK_AREA_HEIGHT
     };
-
-    // Handle card area clicks
     if (CheckCollisionPointRec(inputPosition, deckArea) && interactionMode == INTERACTION_MODE_NORMAL) {
       float currentCardX = deckArea.x + UI_PADDING;
-      float cardAreaY    = deckArea.y + UI_PADDING + 20 + UI_PADDING;      for (int i = 0; i < gameState->handCardCount; ++i) {
+      float cardAreaY    = deckArea.y + UI_PADDING + 20 + UI_PADDING;      for (int i = 0; i < simulatorState->handCardCount; ++i) {
         Rectangle cardRect = {currentCardX - handScrollOffset, cardAreaY, CARD_WIDTH, CARD_HEIGHT};
         if (CheckCollisionPointRec(inputPosition, cardRect)) {
-          Card selectedCardFromHand = gameState->playerHand[i];
+          Card selectedCardFromHand = simulatorState->userHand[i];
           if (selectedCardFromHand.type == CARD_TYPE_ACTION) {
             if (!turnInProgress) {
               TraceLog(LOG_INFO, "CLIENT: Cannot play action cards outside of turn");
             } else if (actionsThisTurn >= maxActionsPerTurn) {
               TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached");
-            } else if (Server_PlayCardFromHand(gameState, i)) {
+            } else if (Server_UseCardFromHand(simulatorState, i)) {
               actionsThisTurn++;
               TraceLog(
                 LOG_INFO, "CLIENT: Played action card '%s' (%d/%d actions)", selectedCardFromHand.name,
@@ -722,174 +707,165 @@ static void HandleGameplayInput(GameState *gameState) {
         }
         currentCardX += CARD_WIDTH + CARD_SPACING;
       }    } 
-    // Handle play area clicks
+
     else if (CheckCollisionPointRec(inputPosition, playArea)) {      Vector2 worldInputPos = GetScreenToWorld2D(inputPosition, gameCamera);
       Vector2 gridPos = {
         floorf(worldInputPos.x / GRID_CELL_SIZE),
         floorf(worldInputPos.y / GRID_CELL_SIZE)
-      };
-
-      // Wiring: Select output component
+      }; 
       if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT) {
-        for (int i = 0; i < gameState->componentCount; ++i) {
-          if (gameState->componentsOnGrid[i].isActive &&
-              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
-              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
-            wiringFromComponentId = gameState->componentsOnGrid[i].id;
+        for (int i = 0; i < simulatorState->elementCount; ++i) {
+          if (simulatorState->elementsOnCanvas[i].isActive &&
+              (int)simulatorState->elementsOnCanvas[i].canvasPosition.x == (int)gridPos.x &&
+              (int)simulatorState->elementsOnCanvas[i].canvasPosition.y == (int)gridPos.y) {
+            wiringFromElementId = simulatorState->elementsOnCanvas[i].id;
             interactionMode = INTERACTION_MODE_WIRING_SELECT_INPUT;
-            TraceLog(LOG_INFO, "CLIENT: Wiring - Output selected from component ID %d",
-                    wiringFromComponentId);
+            TraceLog(LOG_INFO, "CLIENT: Wiring - Output selected from element ID %d",
+                    wiringFromElementId);
             break;
           }
         }
-      }
-      // Wiring: Select input component
+      } 
       else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
-        CircuitComponent *targetComp = NULL;
-        int clickedCompId = -1;
-        
-        // Find clicked component
-        for (int i = 0; i < gameState->componentCount; ++i) {
-          if (gameState->componentsOnGrid[i].isActive &&
-              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
-              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
-            clickedCompId = gameState->componentsOnGrid[i].id;
-            targetComp = &gameState->componentsOnGrid[i];
+        CircuitElement *targetElement = NULL;
+        int clickedElementId = -1;
+
+        for (int i = 0; i < simulatorState->elementCount; ++i) {
+          if (simulatorState->elementsOnCanvas[i].isActive &&
+              (int)simulatorState->elementsOnCanvas[i].canvasPosition.x == (int)gridPos.x &&
+              (int)simulatorState->elementsOnCanvas[i].canvasPosition.y == (int)gridPos.y) {
+            clickedElementId = simulatorState->elementsOnCanvas[i].id;
+            targetElement = &simulatorState->elementsOnCanvas[i];
             break;
           }
         }
 
-        // If found valid target component
-        if (clickedCompId != -1 && clickedCompId != wiringFromComponentId) {
+        if (clickedElementId != -1 && clickedElementId != wiringFromElementId) {
           int targetInputSlot = -1;
           
-          // Check if component can accept inputs
-          if (targetComp->type == COMP_AND_GATE || targetComp->type == COMP_OR_GATE) {
+          if (targetElement->type == ELEMENT_AND || targetElement->type == ELEMENT_OR) {
             for (int s = 0; s < MAX_INPUTS_PER_LOGIC_GATE; ++s) {
-              if (targetComp->inputComponentIDs[s] == -1) {
+              if (targetElement->inputElementIDs[s] == -1) {
                 targetInputSlot = s;
                 break;
               }
             }
           }
 
-          // Create connection if possible
           if (targetInputSlot != -1) {
-            if (Server_CreateConnection(gameState, wiringFromComponentId, clickedCompId,
+            if (Server_CreateConnection(simulatorState, wiringFromElementId, clickedElementId,
                                      targetInputSlot)) {
               TraceLog(LOG_INFO, "CLIENT: Connection created");
             }
           } else {
-            TraceLog(LOG_INFO, "CLIENT: Target component has no available inputs");
+            TraceLog(LOG_INFO, "CLIENT: Target element has no available inputs");
           }
         }
         
-        // Reset wiring mode
         interactionMode = INTERACTION_MODE_NORMAL;
-        wiringFromComponentId = -1;
-      }      // Handle placing components or interacting with existing ones
+        wiringFromElementId = -1;
+      }
       else {
-        // Check if we have a selected card to place
         if (selectedCardIndex != -1) {
-          if (gameState->playerHand[selectedCardIndex].type == CARD_TYPE_OBJECT) {
+          if (simulatorState->userHand[selectedCardIndex].type == CARD_TYPE_ELEMENT) {
             if (!turnInProgress) {
-              TraceLog(LOG_INFO, "CLIENT: Cannot place components outside of turn");
+              TraceLog(LOG_INFO, "CLIENT: Cannot place elements outside of turn");
               selectedCardIndex = -1;
             } else if (actionsThisTurn >= maxActionsPerTurn) {
-              TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached for placing component");
+              TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached for placing element");
               selectedCardIndex = -1;
             } else {
               // Check if cell is occupied
               bool cellOccupied = false;
-              for (int k = 0; k < gameState->componentCount; ++k) {
-                if (gameState->componentsOnGrid[k].isActive &&
-                    (int)gameState->componentsOnGrid[k].gridPosition.x == (int)gridPos.x &&
-                    (int)gameState->componentsOnGrid[k].gridPosition.y == (int)gridPos.y) {
+              for (int k = 0; k < simulatorState->elementCount; ++k) {
+                if (simulatorState->elementsOnCanvas[k].isActive &&
+                    (int)simulatorState->elementsOnCanvas[k].canvasPosition.x == (int)gridPos.x &&
+                    (int)simulatorState->elementsOnCanvas[k].canvasPosition.y == (int)gridPos.y) {
                   cellOccupied = true;
-                  TraceLog(LOG_WARNING, "CLIENT: Grid cell (%.0f, %.0f) is already occupied.", gridPos.x, gridPos.y);
+                  TraceLog(LOG_WARNING, "CLIENT: Canvas cell (%.0f, %.0f) is already occupied.", gridPos.x, gridPos.y);
                   break;
                 }
               }
               
-              // Place component if cell is free
-              if (!cellOccupied && gameState->componentCount < MAX_COMPONENTS_ON_GRID) {
-                Card cardToPlace = gameState->playerHand[selectedCardIndex];
-                CircuitComponent *newComp = &gameState->componentsOnGrid[gameState->componentCount];
-                newComp->isActive = true;
-                newComp->id = gameState->nextComponentId++;
-                newComp->type = cardToPlace.objectToPlace;
-                newComp->gridPosition = gridPos;
-                newComp->outputState = false;
-                newComp->defaultOutputState = false;
-                newComp->connectedInputCount = 0;
+              if (!cellOccupied && simulatorState->elementCount < MAX_ELEMENTS_ON_CANVAS) {
+                Card cardToPlace = simulatorState->userHand[selectedCardIndex];
+                CircuitElement *newElement = &simulatorState->elementsOnCanvas[simulatorState->elementCount];
+                newElement->isActive = true;
+                newElement->id = simulatorState->nextElementId++;
+                newElement->type = cardToPlace.elementToPlace;
+                newElement->canvasPosition = gridPos;
+                newElement->outputState = false;
+                newElement->defaultOutputState = false;
+                newElement->connectedInputCount = 0;
                 
                 for (int k = 0; k < MAX_INPUTS_PER_LOGIC_GATE; ++k) {
-                  newComp->inputComponentIDs[k] = -1;
-                  newComp->actualInputStates[k] = false;
+                  newElement->inputElementIDs[k] = -1;
+                  newElement->actualInputStates[k] = false;
                 }
                 
-                TraceLog(LOG_INFO, "CLIENT: Placed %s (ID: %d) at grid (%.0f, %.0f)", 
-                        cardToPlace.name, newComp->id, gridPos.x, gridPos.y);
-                gameState->componentCount++;
+                TraceLog(LOG_INFO, "CLIENT: Placed %s (ID: %d) at canvas (%.0f, %.0f)", 
+                        cardToPlace.name, newElement->id, gridPos.x, gridPos.y);
+                simulatorState->elementCount++;
                 
-                if (Server_PlayCardFromHand(gameState, selectedCardIndex)) {
+                if (Server_UseCardFromHand(simulatorState, selectedCardIndex)) {
                   actionsThisTurn++;
-                  const char *compName = "Unknown Component";
-                  switch (newComp->type) {
-                    case COMP_MOMENTARY_SWITCH: compName = "Momentary Switch"; break;
-                    case COMP_LATCHING_SWITCH: compName = "Latching Switch"; break;
-                    case COMP_AND_GATE: compName = "AND Gate"; break;
-                    case COMP_OR_GATE: compName = "OR Gate"; break;
-                    case COMP_SOURCE: compName = "Source"; break;
-                    case COMP_SINK: compName = "Sink"; break;
+                  const char *elementName = "Unknown Element";
+                  switch (newElement->type) {
+                    case ELEMENT_BUTTON: elementName = "Button"; break;
+                    case ELEMENT_SWITCH: elementName = "Switch"; break;
+                    case ELEMENT_AND: elementName = "AND Gate"; break;
+                    case ELEMENT_OR: elementName = "OR Gate"; break;
+                    case ELEMENT_SOURCE: elementName = "Source"; break;
+                    case ELEMENT_SENSOR: elementName = "Sensor"; break;
                     default: break;
                   }
-                  TraceLog(LOG_INFO, "CLIENT: Placed component '%s' (%d/%d actions)", 
-                          compName, actionsThisTurn, maxActionsPerTurn);
+                  TraceLog(LOG_INFO, "CLIENT: Placed element '%s' (%d/%d actions)", 
+                          elementName, actionsThisTurn, maxActionsPerTurn);
                 }
                 selectedCardIndex = -1;
               } else if (cellOccupied) {
                 selectedCardIndex = -1;
               } else {
-                TraceLog(LOG_WARNING, "CLIENT: Max components reached on grid.");
+                TraceLog(LOG_WARNING, "CLIENT: Max elements reached on canvas.");
                 selectedCardIndex = -1;
               }
-            }
-          } else {
+            }          } else {
             TraceLog(LOG_INFO, "CLIENT: Selected card is not an object card. Deselecting.");
             selectedCardIndex = -1;
           }
         } else {
-          // No card selected, try to interact with existing component
-          int clickedComponentId = -1;
-          ComponentType clickedComponentType = COMP_NONE;
-          for (int k = 0; k < gameState->componentCount; ++k) {
-            if (gameState->componentsOnGrid[k].isActive) {
-              CircuitComponent comp = gameState->componentsOnGrid[k];
-              if ((int)comp.gridPosition.x == (int)gridPos.x && 
-                  (int)comp.gridPosition.y == (int)gridPos.y) {
-                clickedComponentId = comp.id;
-                clickedComponentType = comp.type;
+          int clickedElementId = -1;
+          ElementType clickedElementType = ELEMENT_NONE;
+          for (int k = 0; k < simulatorState->elementCount; ++k) {
+            if (simulatorState->elementsOnCanvas[k].isActive) {
+              CircuitElement element = simulatorState->elementsOnCanvas[k];
+              if ((int)element.canvasPosition.x == (int)gridPos.x && 
+                  (int)element.canvasPosition.y == (int)gridPos.y) {
+                clickedElementId = element.id;
+                clickedElementType = element.type;
                 break;
               }
             }
           }
           
-          if (clickedComponentId != -1) {
-            Server_InteractWithComponent(gameState, clickedComponentId);
-            if (clickedComponentType == COMP_MOMENTARY_SWITCH) {
-              heldMomentarySwitchId = clickedComponentId;
-              TraceLog(LOG_INFO, "CLIENT: Holding momentary switch ID %d", heldMomentarySwitchId);
+          if (clickedElementId != -1) {
+            Server_InteractWithElement(simulatorState, clickedElementId);
+            if (clickedElementType == ELEMENT_BUTTON) {
+              heldButtonId = clickedElementId;
+              TraceLog(LOG_INFO, "CLIENT: Holding button ID %d", heldButtonId);
             }
           }
         }
       }
-    }
+    }  }
+    
+  if (leftInputReleased && heldButtonId != -1) {
+    Server_ReleaseElementInteraction(simulatorState, heldButtonId);
+    heldButtonId = -1;
   }
-  // Handle momentary switch release
-  if (leftInputReleased && heldMomentarySwitchId != -1) {
-    Server_ReleaseComponentInteraction(gameState, heldMomentarySwitchId);
-    heldMomentarySwitchId = -1;
+
+  if (heldButtonId != -1 && (IsMouseButtonDown(MOUSE_BUTTON_LEFT) || GetTouchPointCount() > 0)) {
+    Server_InteractWithElement(simulatorState, heldButtonId);
   }
 }
 
@@ -935,7 +911,7 @@ static bool DrawUIButton(Rectangle rect, const char* label, Color bg, Color fg) 
     return pressed;
 }
 
-static void DrawTouchUIAndHandle(GameState* gameState) {
+static void DrawTouchUIAndHandle(SimulatorState* simulatorState) {
     float w = (float)GetScreenWidth();
     float h = (float)GetScreenHeight();
     Rectangle bar = GetUIButtonBarRect(w, h);
@@ -951,11 +927,11 @@ static void DrawTouchUIAndHandle(GameState* gameState) {
         interactionMode != INTERACTION_MODE_NORMAL ? COLOR_ACCENT_PRIMARY : LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
         if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT || interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
             interactionMode = INTERACTION_MODE_NORMAL;
-            wiringFromComponentId = -1;
+            wiringFromElementId = -1;
         } else {
             interactionMode = INTERACTION_MODE_WIRING_SELECT_OUTPUT;
             selectedCardIndex = -1;
-            heldMomentarySwitchId = -1;
+            heldButtonId = -1;
         }
     }
 
@@ -963,12 +939,13 @@ static void DrawTouchUIAndHandle(GameState* gameState) {
     x += btnW + spacing;
     Rectangle drawBtn = {x, y, btnW, btnH};
     if (DrawUIButton(drawBtn, "Draw Card", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
-        Server_PlayerDrawCard(gameState);
+        Server_UserDrawCard(simulatorState);
     }
 
     // Turn control button
     x += btnW + spacing;
-    Rectangle turnBtn = {x, y, btnW, btnH};    if (DrawUIButton(turnBtn, turnInProgress ? "End Turn" : "Start Turn", 
+    Rectangle turnBtn = {x, y, btnW, btnH};
+    if (DrawUIButton(turnBtn, turnInProgress ? "End Turn" : "Start Turn", 
         turnInProgress ? COLOR_ACCENT_SECONDARY : LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
         if (!turnInProgress) {
             turnInProgress = true;
@@ -978,8 +955,9 @@ static void DrawTouchUIAndHandle(GameState* gameState) {
             handScrollOffset = 0.0f;
         }
     }
+    
     x += btnW + spacing;
-    if (gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+    if (simulatorState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
         Rectangle leftBtn = {w - btnW*2 - spacing*2, y, btnW, btnH};
         Rectangle rightBtn = {w - btnW - spacing, y, btnW, btnH};
         if (DrawUIButton(leftBtn, "<", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
@@ -987,26 +965,26 @@ static void DrawTouchUIAndHandle(GameState* gameState) {
             if (handScrollOffset < 0) handScrollOffset = 0;
         }
         if (DrawUIButton(rightBtn, ">", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
-            float maxScroll = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
+            float maxScroll = (simulatorState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
             handScrollOffset += (CARD_WIDTH + CARD_SPACING);
             if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
         }
     }
 }
 
-void Client_UpdateAndDraw(GameState *gameState) {
+void Client_UpdateAndDraw(SimulatorState *simulatorState) {
   if (currentClientScreen == CLIENT_SCREEN_LOADING) {
     framesCounter++;
     if (framesCounter > 120) { currentClientScreen = CLIENT_SCREEN_TITLE; }
   } else if (currentClientScreen == CLIENT_SCREEN_TITLE) {
-    if (IsKeyPressed(KEY_ENTER)) { currentClientScreen = CLIENT_SCREEN_GAMEPLAY; }
+    if (IsKeyPressed(KEY_ENTER)) { currentClientScreen = CLIENT_SCREEN_SIMULATION; }
   } else if (currentClientScreen == CLIENT_SCREEN_SCENARIO_DETAILS) {
     if (IsKeyPressed(KEY_Q)) {
-      currentClientScreen = CLIENT_SCREEN_GAMEPLAY;
-      TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Gameplay (Q key).");
+      currentClientScreen = CLIENT_SCREEN_SIMULATION;
+      TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Simulation (Q key).");
     }
-  } else if (currentClientScreen == CLIENT_SCREEN_GAMEPLAY) {
-    HandleGameplayInput(gameState);
+  } else if (currentClientScreen == CLIENT_SCREEN_SIMULATION) {
+    HandleGameplayInput(simulatorState);
   }
   BeginDrawing();
   ClearBackground(COLOR_BACKGROUND);
@@ -1015,17 +993,17 @@ void Client_UpdateAndDraw(GameState *gameState) {
   } else if (currentClientScreen == CLIENT_SCREEN_TITLE) {
     DrawTitleScreen();
   } else if (currentClientScreen == CLIENT_SCREEN_SCENARIO_DETAILS) {
-    if (gameState != NULL) {
-      DrawScenarioDetailsScreen(gameState);
+    if (simulatorState != NULL) {
+      DrawScenarioDetailsScreen(simulatorState);
     } else {
-      DrawTextEx(clientFont, "Error: GameState is NULL for Details", (Vector2){20, 20}, 20, 1, RED);
+      DrawTextEx(clientFont, "Error: SimulatorState is NULL for Details", (Vector2){20, 20}, 20, 1, RED);
     }
-  } else if (currentClientScreen == CLIENT_SCREEN_GAMEPLAY) {
-    if (gameState != NULL) {
-      DrawGameplayScreen(gameState);
-      DrawTouchUIAndHandle(gameState);
+  } else if (currentClientScreen == CLIENT_SCREEN_SIMULATION) {
+    if (simulatorState != NULL) {
+      DrawGameplayScreen(simulatorState);
+      DrawTouchUIAndHandle(simulatorState);
     } else {
-      DrawTextEx(clientFont, "Error: GameState is NULL", (Vector2){20, 20}, 20, 1, RED);
+      DrawTextEx(clientFont, "Error: SimulatorState is NULL", (Vector2){20, 20}, 20, 1, RED);
     }
   } else {
     DrawTextEx(clientFont, "UNKNOWN CLIENT SCREEN", (Vector2){20, 20}, 20, 1, RED);

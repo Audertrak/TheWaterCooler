@@ -5,7 +5,7 @@
  * Handles initialization, main update/draw loop, and shutdown for the client (UI) portion.
  * All rendering and user input is managed here. Uses Raylib/Raygui for all graphics and input.
  *
- * The client interacts with the core logic via the GameState structure defined in server.h.
+ * The client interacts with the core logic via the SimulatorState structure defined in server.h.
  *
  * @see server.h
  */
@@ -23,9 +23,9 @@ bool Client_Init(void);
 
 /**
  * @brief Update the client state and render the UI.
- * @param gameState Pointer to the current GameState structure.
+ * @param simulatorState Pointer to the current SimulatorState structure.
  */
-void Client_UpdateAndDraw(GameState *gameState);
+void Client_UpdateAndDraw(SimulatorState *simulatorState);
 
 /**
  * @brief Release all client resources and close the UI.
@@ -45,7 +45,7 @@ typedef enum ClientScreen {
   CLIENT_SCREEN_LOADING,           /**< Loading screen */
   CLIENT_SCREEN_TITLE,             /**< Title screen */
   CLIENT_SCREEN_SCENARIO_DETAILS,  /**< Scenario details screen */
-  CLIENT_SCREEN_GAMEPLAY           /**< Main system construction screen */
+  CLIENT_SCREEN_SIMULATION         /**< Main system construction screen */
 } ClientScreen;
 
 /**
