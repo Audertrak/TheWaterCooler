@@ -15,14 +15,6 @@ typedef enum ClientInteractionMode {
   INTERACTION_MODE_WIRING_SELECT_INPUT
 } ClientInteractionMode;
 
-/*
-typedef enum ClientScreen {
-  CLIENT_SCREEN_LOADING,
-  CLIENT_SCREEN_TITLE,
-  CLIENT_SCREEN_GAMEPLAY
-} ClientScreen;
-*/
-
 static bool                  gameplayHasLoggedEntry = false;
 static ClientScreen          currentClientScreen    = CLIENT_SCREEN_LOADING;
 static Font                  clientFont;
@@ -38,11 +30,14 @@ static bool                  turnInProgress        = true;
 static int                   actionsThisTurn       = 0;
 static const int             maxActionsPerTurn     = 3;
 
-static void                  DrawGameplayGrid(void);
-static void                  DrawComponentsOnGrid(const GameState *gameState);
-static void                  DrawConnections(const GameState *gameState);
-static void                  DrawScenarioDetailsScreen(const GameState *gameState);
-static void                  HandleGameplayInput(GameState *gameState);
+static Rectangle            GetUIButtonBarRect(float screenWidth, float screenHeight);
+static bool                DrawUIButton(Rectangle rect, const char* label, Color bg, Color fg);
+static void               DrawTouchUIAndHandle(GameState* gameState);
+static void               DrawGameplayGrid(void);
+static void               DrawComponentsOnGrid(const GameState *gameState);
+static void               DrawConnections(const GameState *gameState);
+static void               DrawScenarioDetailsScreen(const GameState *gameState);
+static void               HandleGameplayInput(GameState *gameState);
 
 static Vector2               GetWorldPositionForGrid(Vector2 gridPos) {
   return (Vector2){gridPos.x * GRID_CELL_SIZE + GRID_CELL_SIZE / 2.0f,
@@ -255,13 +250,19 @@ static void DrawScenarioDetailsScreen(const GameState *gameState) {
   float       currentScreenWidth  = (float)GetScreenWidth();
   float       currentScreenHeight = (float)GetScreenHeight();
 
+  float closeBtnW = 100, closeBtnH = 36;
+  Rectangle closeBtn = {currentScreenWidth - closeBtnW - UI_PADDING, UI_PADDING, closeBtnW, closeBtnH};
+  if (DrawUIButton(closeBtn, "Return", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+    currentClientScreen = CLIENT_SCREEN_GAMEPLAY;
+    TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Gameplay");
+  }
+
   const char *title               = TextFormat("Details for Scenario: %s", gameState->currentScenario.name);
   Vector2     titleSize           = MeasureTextEx(clientFont, title, 30, 2);
   DrawTextEx(
     clientFont, title, (Vector2){(currentScreenWidth - titleSize.x) / 2, UI_PADDING * 2}, 30, 2, COLOR_TEXT_PRIMARY
   );
-
-  const char *instructions     = "Press [ESC] to return to Gameplay";
+  const char *instructions     = "Press [Q] to return to Gameplay";
   Vector2     instructionsSize = MeasureTextEx(clientFont, instructions, 20, 1);
   DrawTextEx(
     clientFont, instructions,
@@ -563,14 +564,14 @@ static void DrawGameplayScreen(const GameState *gameState) {
 
 static void HandleGameplayInput(GameState *gameState) {
   if (IsKeyPressed(KEY_ESCAPE)) {
-    currentClientScreen    = CLIENT_SCREEN_TITLE;
-    interactionMode        = INTERACTION_MODE_NORMAL;
-    wiringFromComponentId  = -1;
-    selectedCardIndex      = -1;
-    heldMomentarySwitchId  = -1;
+    currentClientScreen = CLIENT_SCREEN_TITLE;
+    interactionMode = INTERACTION_MODE_NORMAL;
+    wiringFromComponentId = -1;
+    selectedCardIndex = -1;
+    heldMomentarySwitchId = -1;
     gameplayHasLoggedEntry = false;
     TraceLog(LOG_INFO, "CLIENT: Returning to Title Screen from Gameplay.");
-    return; // Return early to prevent further gameplay input processing this frame
+    return;
   }
 
   if (!gameplayHasLoggedEntry && gameState != NULL) {
@@ -610,9 +611,9 @@ static void HandleGameplayInput(GameState *gameState) {
   };
   Rectangle deckArea = {
     0, (float)GetScreenHeight() - UI_DECK_AREA_HEIGHT, (float)GetScreenWidth(), UI_DECK_AREA_HEIGHT
-  };
-  Vector2 mousePosition = GetMousePosition();
+  };  Vector2 mousePosition = GetMousePosition();
 
+  // Handle camera controls (mouse only for precise control)
   if (CheckCollisionPointRec(mousePosition, playArea)) {
     if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE)) {
       Vector2 delta     = GetMouseDelta();
@@ -631,6 +632,7 @@ static void HandleGameplayInput(GameState *gameState) {
     }
   }
 
+  // Handle hand scrolling (mouse wheel or touch gestures)
   if (CheckCollisionPointRec(mousePosition, deckArea) && gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
     float wheel = GetMouseWheelMove();
     if (wheel != 0) {
@@ -639,6 +641,29 @@ static void HandleGameplayInput(GameState *gameState) {
       if (handScrollOffset < 0) handScrollOffset = 0;
       if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
     }
+  }
+
+  // Handle touch gestures for hand scrolling
+  static Vector2 lastTouchPos = {0};
+  static bool touchScrolling = false;
+  
+  if (GetTouchPointCount() > 0) {
+    Vector2 currentTouchPos = GetTouchPosition(0);
+    if (CheckCollisionPointRec(currentTouchPos, deckArea) && gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+      if (!touchScrolling) {
+        lastTouchPos = currentTouchPos;
+        touchScrolling = true;
+      } else {
+        float deltaX = currentTouchPos.x - lastTouchPos.x;
+        float maxScroll = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
+        handScrollOffset -= deltaX;
+        if (handScrollOffset < 0) handScrollOffset = 0;
+        if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
+        lastTouchPos = currentTouchPos;
+      }
+    }
+  } else {
+    touchScrolling = false;
   }
 
   if (IsKeyPressed(KEY_SPACE)) {
@@ -651,42 +676,120 @@ static void HandleGameplayInput(GameState *gameState) {
       handScrollOffset = 0.0f;
       TraceLog(LOG_INFO, "CLIENT: Ended turn");
     }
-  }
+  }  // Handle both mouse and touch input
+  bool leftInputPressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || 
+                         (GetTouchPointCount() > 0 && GetTouchPointCount() == 1);
+  bool leftInputReleased = IsMouseButtonReleased(MOUSE_BUTTON_LEFT) || 
+                          (GetTouchPointCount() == 0 && heldMomentarySwitchId != -1);
+  
+  Vector2 inputPosition = GetTouchPointCount() > 0 ? GetTouchPosition(0) : GetMousePosition();
+  
+  if (leftInputPressed) {
+    Rectangle playArea = {
+      0, UI_HEADER_HEIGHT, (float)GetScreenWidth(),
+      (float)GetScreenHeight() - UI_HEADER_HEIGHT - UI_DECK_AREA_HEIGHT
+    };
+    Rectangle deckArea = {
+      0, (float)GetScreenHeight() - UI_DECK_AREA_HEIGHT,
+      (float)GetScreenWidth(), UI_DECK_AREA_HEIGHT
+    };
 
-  if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
-    if (interactionMode == INTERACTION_MODE_NORMAL) {
-      if (CheckCollisionPointRec(mousePosition, deckArea)) {
-        float currentCardX = deckArea.x + UI_PADDING;
-        float cardAreaY    = deckArea.y + UI_PADDING + 20 + UI_PADDING;
-
-        for (int i = 0; i < gameState->handCardCount; ++i) {
-          Rectangle cardRect = {currentCardX - handScrollOffset, cardAreaY, CARD_WIDTH, CARD_HEIGHT};
-          if (CheckCollisionPointRec(mousePosition, cardRect)) {
-            Card selectedCardFromHand = gameState->playerHand[i];
-            if (selectedCardFromHand.type == CARD_TYPE_ACTION) {
-              if (!turnInProgress) {
-                TraceLog(LOG_INFO, "CLIENT: Cannot play action cards outside of turn");
-              } else if (actionsThisTurn >= maxActionsPerTurn) {
-                TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached");
-              } else if (Server_PlayCardFromHand(gameState, i)) {
-                actionsThisTurn++;
-                TraceLog(
-                  LOG_INFO, "CLIENT: Played action card '%s' (%d/%d actions)", selectedCardFromHand.name,
-                  actionsThisTurn, maxActionsPerTurn
-                );
-              }
-            } else {
-              if (selectedCardIndex == i) selectedCardIndex = -1;
-              else selectedCardIndex = i;
-              TraceLog(LOG_INFO, "CLIENT: Card %d selected/deselected.", i);
+    // Handle card area clicks
+    if (CheckCollisionPointRec(inputPosition, deckArea) && interactionMode == INTERACTION_MODE_NORMAL) {
+      float currentCardX = deckArea.x + UI_PADDING;
+      float cardAreaY    = deckArea.y + UI_PADDING + 20 + UI_PADDING;      for (int i = 0; i < gameState->handCardCount; ++i) {
+        Rectangle cardRect = {currentCardX - handScrollOffset, cardAreaY, CARD_WIDTH, CARD_HEIGHT};
+        if (CheckCollisionPointRec(inputPosition, cardRect)) {
+          Card selectedCardFromHand = gameState->playerHand[i];
+          if (selectedCardFromHand.type == CARD_TYPE_ACTION) {
+            if (!turnInProgress) {
+              TraceLog(LOG_INFO, "CLIENT: Cannot play action cards outside of turn");
+            } else if (actionsThisTurn >= maxActionsPerTurn) {
+              TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached");
+            } else if (Server_PlayCardFromHand(gameState, i)) {
+              actionsThisTurn++;
+              TraceLog(
+                LOG_INFO, "CLIENT: Played action card '%s' (%d/%d actions)", selectedCardFromHand.name,
+                actionsThisTurn, maxActionsPerTurn
+              );
             }
+          } else {
+            if (selectedCardIndex == i) selectedCardIndex = -1;
+            else selectedCardIndex = i;
+            TraceLog(LOG_INFO, "CLIENT: Card %d selected/deselected.", i);
+          }
+          break;
+        }
+        currentCardX += CARD_WIDTH + CARD_SPACING;
+      }    } 
+    // Handle play area clicks
+    else if (CheckCollisionPointRec(inputPosition, playArea)) {      Vector2 worldInputPos = GetScreenToWorld2D(inputPosition, gameCamera);
+      Vector2 gridPos = {
+        floorf(worldInputPos.x / GRID_CELL_SIZE),
+        floorf(worldInputPos.y / GRID_CELL_SIZE)
+      };
+
+      // Wiring: Select output component
+      if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT) {
+        for (int i = 0; i < gameState->componentCount; ++i) {
+          if (gameState->componentsOnGrid[i].isActive &&
+              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
+              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
+            wiringFromComponentId = gameState->componentsOnGrid[i].id;
+            interactionMode = INTERACTION_MODE_WIRING_SELECT_INPUT;
+            TraceLog(LOG_INFO, "CLIENT: Wiring - Output selected from component ID %d",
+                    wiringFromComponentId);
             break;
           }
-          currentCardX += CARD_WIDTH + CARD_SPACING;
         }
-      } else if (CheckCollisionPointRec(mousePosition, playArea)) {
-        Vector2 worldMousePos = GetScreenToWorld2D(mousePosition, gameCamera);
-        Vector2 gridPos       = {floorf(worldMousePos.x / GRID_CELL_SIZE), floorf(worldMousePos.y / GRID_CELL_SIZE)};
+      }
+      // Wiring: Select input component
+      else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
+        CircuitComponent *targetComp = NULL;
+        int clickedCompId = -1;
+        
+        // Find clicked component
+        for (int i = 0; i < gameState->componentCount; ++i) {
+          if (gameState->componentsOnGrid[i].isActive &&
+              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
+              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
+            clickedCompId = gameState->componentsOnGrid[i].id;
+            targetComp = &gameState->componentsOnGrid[i];
+            break;
+          }
+        }
+
+        // If found valid target component
+        if (clickedCompId != -1 && clickedCompId != wiringFromComponentId) {
+          int targetInputSlot = -1;
+          
+          // Check if component can accept inputs
+          if (targetComp->type == COMP_AND_GATE || targetComp->type == COMP_OR_GATE) {
+            for (int s = 0; s < MAX_INPUTS_PER_LOGIC_GATE; ++s) {
+              if (targetComp->inputComponentIDs[s] == -1) {
+                targetInputSlot = s;
+                break;
+              }
+            }
+          }
+
+          // Create connection if possible
+          if (targetInputSlot != -1) {
+            if (Server_CreateConnection(gameState, wiringFromComponentId, clickedCompId,
+                                     targetInputSlot)) {
+              TraceLog(LOG_INFO, "CLIENT: Connection created");
+            }
+          } else {
+            TraceLog(LOG_INFO, "CLIENT: Target component has no available inputs");
+          }
+        }
+        
+        // Reset wiring mode
+        interactionMode = INTERACTION_MODE_NORMAL;
+        wiringFromComponentId = -1;
+      }      // Handle placing components or interacting with existing ones
+      else {
+        // Check if we have a selected card to place
         if (selectedCardIndex != -1) {
           if (gameState->playerHand[selectedCardIndex].type == CARD_TYPE_OBJECT) {
             if (!turnInProgress) {
@@ -696,6 +799,7 @@ static void HandleGameplayInput(GameState *gameState) {
               TraceLog(LOG_INFO, "CLIENT: Maximum actions per turn reached for placing component");
               selectedCardIndex = -1;
             } else {
+              // Check if cell is occupied
               bool cellOccupied = false;
               for (int k = 0; k < gameState->componentCount; ++k) {
                 if (gameState->componentsOnGrid[k].isActive &&
@@ -706,41 +810,42 @@ static void HandleGameplayInput(GameState *gameState) {
                   break;
                 }
               }
+              
+              // Place component if cell is free
               if (!cellOccupied && gameState->componentCount < MAX_COMPONENTS_ON_GRID) {
-                Card              cardToPlace = gameState->playerHand[selectedCardIndex];
-                CircuitComponent *newComp     = &gameState->componentsOnGrid[gameState->componentCount];
-                newComp->isActive             = true;
-                newComp->id                   = gameState->nextComponentId++;
-                newComp->type                 = cardToPlace.objectToPlace;
-                newComp->gridPosition         = gridPos;
-                newComp->outputState          = false;
-                newComp->defaultOutputState   = false;
-                newComp->connectedInputCount  = 0;
+                Card cardToPlace = gameState->playerHand[selectedCardIndex];
+                CircuitComponent *newComp = &gameState->componentsOnGrid[gameState->componentCount];
+                newComp->isActive = true;
+                newComp->id = gameState->nextComponentId++;
+                newComp->type = cardToPlace.objectToPlace;
+                newComp->gridPosition = gridPos;
+                newComp->outputState = false;
+                newComp->defaultOutputState = false;
+                newComp->connectedInputCount = 0;
+                
                 for (int k = 0; k < MAX_INPUTS_PER_LOGIC_GATE; ++k) {
                   newComp->inputComponentIDs[k] = -1;
                   newComp->actualInputStates[k] = false;
                 }
-                TraceLog(
-                  LOG_INFO, "CLIENT: Placed %s (ID: %d) at grid (%.0f, %.0f)", cardToPlace.name, newComp->id, gridPos.x,
-                  gridPos.y
-                );
+                
+                TraceLog(LOG_INFO, "CLIENT: Placed %s (ID: %d) at grid (%.0f, %.0f)", 
+                        cardToPlace.name, newComp->id, gridPos.x, gridPos.y);
                 gameState->componentCount++;
+                
                 if (Server_PlayCardFromHand(gameState, selectedCardIndex)) {
                   actionsThisTurn++;
                   const char *compName = "Unknown Component";
                   switch (newComp->type) {
                     case COMP_MOMENTARY_SWITCH: compName = "Momentary Switch"; break;
-                    case COMP_LATCHING_SWITCH : compName = "Latching Switch"; break;
-                    case COMP_AND_GATE        : compName = "AND Gate"; break;
-                    case COMP_OR_GATE         : compName = "OR Gate"; break;
-                    case COMP_SOURCE          : compName = "Source"; break;
-                    case COMP_SINK            : compName = "Sink"; break;
-                    default                   : break;
+                    case COMP_LATCHING_SWITCH: compName = "Latching Switch"; break;
+                    case COMP_AND_GATE: compName = "AND Gate"; break;
+                    case COMP_OR_GATE: compName = "OR Gate"; break;
+                    case COMP_SOURCE: compName = "Source"; break;
+                    case COMP_SINK: compName = "Sink"; break;
+                    default: break;
                   }
-                  TraceLog(
-                    LOG_INFO, "CLIENT: Placed component '%s' (%d/%d actions)", compName, actionsThisTurn,
-                    maxActionsPerTurn
-                  );
+                  TraceLog(LOG_INFO, "CLIENT: Placed component '%s' (%d/%d actions)", 
+                          compName, actionsThisTurn, maxActionsPerTurn);
                 }
                 selectedCardIndex = -1;
               } else if (cellOccupied) {
@@ -755,18 +860,21 @@ static void HandleGameplayInput(GameState *gameState) {
             selectedCardIndex = -1;
           }
         } else {
-          int           clickedComponentId   = -1;
+          // No card selected, try to interact with existing component
+          int clickedComponentId = -1;
           ComponentType clickedComponentType = COMP_NONE;
           for (int k = 0; k < gameState->componentCount; ++k) {
             if (gameState->componentsOnGrid[k].isActive) {
               CircuitComponent comp = gameState->componentsOnGrid[k];
-              if ((int)comp.gridPosition.x == (int)gridPos.x && (int)comp.gridPosition.y == (int)gridPos.y) {
-                clickedComponentId   = comp.id;
+              if ((int)comp.gridPosition.x == (int)gridPos.x && 
+                  (int)comp.gridPosition.y == (int)gridPos.y) {
+                clickedComponentId = comp.id;
                 clickedComponentType = comp.type;
                 break;
               }
             }
           }
+          
           if (clickedComponentId != -1) {
             Server_InteractWithComponent(gameState, clickedComponentId);
             if (clickedComponentType == COMP_MOMENTARY_SWITCH) {
@@ -776,82 +884,114 @@ static void HandleGameplayInput(GameState *gameState) {
           }
         }
       }
-    } else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT) {
-      if (CheckCollisionPointRec(mousePosition, playArea)) {
-        Vector2 worldMousePos = GetScreenToWorld2D(mousePosition, gameCamera);
-        Vector2 gridPos       = {floorf(worldMousePos.x / GRID_CELL_SIZE), floorf(worldMousePos.y / GRID_CELL_SIZE)};
-        int     clickedCompId = -1;
-        for (int i = 0; i < gameState->componentCount; ++i) {
-          if (gameState->componentsOnGrid[i].isActive &&
-              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
-              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
-            clickedCompId = gameState->componentsOnGrid[i].id;
-            break;
-          }
-        }
-        if (clickedCompId != -1) {
-          wiringFromComponentId = clickedCompId;
-          interactionMode       = INTERACTION_MODE_WIRING_SELECT_INPUT;
-          TraceLog(
-            LOG_INFO, "CLIENT: Wiring - Output selected from component ID %d. Select Target Input.",
-            wiringFromComponentId
-          );
-        }
-      }
-    } else if (interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
-      if (CheckCollisionPointRec(mousePosition, playArea)) {
-        Vector2 worldMousePos = GetScreenToWorld2D(mousePosition, gameCamera);
-        Vector2 gridPos       = {floorf(worldMousePos.x / GRID_CELL_SIZE), floorf(worldMousePos.y / GRID_CELL_SIZE)};
-        int     clickedCompId = -1;
-        CircuitComponent *targetComp = NULL;
-        for (int i = 0; i < gameState->componentCount; ++i) {
-          if (gameState->componentsOnGrid[i].isActive &&
-              (int)gameState->componentsOnGrid[i].gridPosition.x == (int)gridPos.x &&
-              (int)gameState->componentsOnGrid[i].gridPosition.y == (int)gridPos.y) {
-            clickedCompId = gameState->componentsOnGrid[i].id;
-            targetComp    = &gameState->componentsOnGrid[i];
-            break;
-          }
-        }
-        if (clickedCompId != -1 && clickedCompId != wiringFromComponentId) {
-          int targetInputSlot = -1;
-          if (targetComp->type == COMP_AND_GATE || targetComp->type == COMP_OR_GATE) {
-            for (int s = 0; s < MAX_INPUTS_PER_LOGIC_GATE; ++s) {
-              if (targetComp->inputComponentIDs[s] == -1) {
-                targetInputSlot = s;
-                break;
-              }
-            }
-          }
-          if (targetInputSlot != -1) {
-            if (Server_CreateConnection(gameState, wiringFromComponentId, clickedCompId, targetInputSlot)) {
-              TraceLog(LOG_INFO, "CLIENT: Connection attempt sent to server.");
-            } else {
-              TraceLog(LOG_WARNING, "CLIENT: Server_CreateConnection failed.");
-            }
-          } else {
-            TraceLog(LOG_INFO, "CLIENT: Target component has no available input slots or is not a gate.");
-          }
-        } else if (clickedCompId == wiringFromComponentId) {
-          TraceLog(LOG_INFO, "CLIENT: Cannot connect component to itself.");
-        }
-        interactionMode       = INTERACTION_MODE_NORMAL;
-        wiringFromComponentId = -1;
-      } else {
-        interactionMode       = INTERACTION_MODE_NORMAL;
-        wiringFromComponentId = -1;
-        TraceLog(LOG_INFO, "CLIENT: Wiring cancelled (clicked outside play area).");
-      }
     }
   }
+  // Handle momentary switch release
+  if (leftInputReleased && heldMomentarySwitchId != -1) {
+    Server_ReleaseComponentInteraction(gameState, heldMomentarySwitchId);
+    heldMomentarySwitchId = -1;
+  }
+}
 
-  if (IsMouseButtonReleased(MOUSE_BUTTON_LEFT)) {
-    if (heldMomentarySwitchId != -1) {
-      TraceLog(LOG_INFO, "CLIENT: Releasing momentary switch ID %d", heldMomentarySwitchId);
-      Server_ReleaseComponentInteraction(gameState, heldMomentarySwitchId);
-      heldMomentarySwitchId = -1;
+static Rectangle GetUIButtonBarRect(float screenWidth, float screenHeight) {
+    float barHeight = 48;
+    Rectangle deckArea = {0, screenHeight - UI_DECK_AREA_HEIGHT, screenWidth, UI_DECK_AREA_HEIGHT};
+    return (Rectangle){0, deckArea.y - barHeight, screenWidth, barHeight};
+}
+
+static bool DrawUIButton(Rectangle rect, const char* label, Color bg, Color fg) {
+    Vector2 inputPos = GetTouchPointCount() > 0 ? GetTouchPosition(0) : GetMousePosition();
+    bool isHovered = CheckCollisionPointRec(inputPos, rect);
+    
+    // Draw button background with hover effect
+    Color bgColor = bg;
+    if (isHovered) {
+        bgColor = Fade(COLOR_ACCENT_PRIMARY, 0.3f);
     }
-  }
+    DrawRectangleRec(rect, bgColor);
+    
+    // Draw border with increased thickness for touch targets
+    float borderThickness = 2.0f;
+    DrawRectangleLinesEx(rect, borderThickness, isHovered ? COLOR_ACCENT_PRIMARY : DARKGRAY);
+    
+    // Draw button text with proper centering
+    Vector2 textSize = MeasureTextEx(clientFont, label, 20, 1);
+    Vector2 textPos = {
+        rect.x + (rect.width - textSize.x) / 2,
+        rect.y + (rect.height - textSize.y) / 2
+    };
+    DrawTextEx(clientFont, label, textPos, 20, 1, fg);
+    
+    // Handle both mouse and touch input
+    bool pressed = false;
+    bool inputPressed = IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || 
+                       (GetTouchPointCount() > 0);
+    
+    if (isHovered && inputPressed) {
+        pressed = true;
+        DrawRectangleRec(rect, Fade(COLOR_ACCENT_PRIMARY, 0.5f));  // Visual feedback for press
+    }
+    
+    return pressed;
+}
+
+static void DrawTouchUIAndHandle(GameState* gameState) {
+    float w = (float)GetScreenWidth();
+    float h = (float)GetScreenHeight();
+    Rectangle bar = GetUIButtonBarRect(w, h);
+    
+    // Increase button sizes for better touch targets
+    float btnW = 130, btnH = bar.height - 8;
+    float spacing = 16;
+    float x = bar.x + spacing, y = bar.y + 4;
+
+    // Wiring mode toggle button
+    Rectangle wiringBtn = {x, y, btnW, btnH};
+    if (DrawUIButton(wiringBtn, interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT ? "Exit Wiring" : "Wiring", 
+        interactionMode != INTERACTION_MODE_NORMAL ? COLOR_ACCENT_PRIMARY : LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+        if (interactionMode == INTERACTION_MODE_WIRING_SELECT_OUTPUT || interactionMode == INTERACTION_MODE_WIRING_SELECT_INPUT) {
+            interactionMode = INTERACTION_MODE_NORMAL;
+            wiringFromComponentId = -1;
+        } else {
+            interactionMode = INTERACTION_MODE_WIRING_SELECT_OUTPUT;
+            selectedCardIndex = -1;
+            heldMomentarySwitchId = -1;
+        }
+    }
+
+    // Draw card button
+    x += btnW + spacing;
+    Rectangle drawBtn = {x, y, btnW, btnH};
+    if (DrawUIButton(drawBtn, "Draw Card", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+        Server_PlayerDrawCard(gameState);
+    }
+
+    // Turn control button
+    x += btnW + spacing;
+    Rectangle turnBtn = {x, y, btnW, btnH};    if (DrawUIButton(turnBtn, turnInProgress ? "End Turn" : "Start Turn", 
+        turnInProgress ? COLOR_ACCENT_SECONDARY : LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+        if (!turnInProgress) {
+            turnInProgress = true;
+            actionsThisTurn = 0;
+        } else {
+            turnInProgress = false;
+            handScrollOffset = 0.0f;
+        }
+    }
+    x += btnW + spacing;
+    if (gameState->handCardCount > MAX_VISIBLE_CARDS_IN_HAND) {
+        Rectangle leftBtn = {w - btnW*2 - spacing*2, y, btnW, btnH};
+        Rectangle rightBtn = {w - btnW - spacing, y, btnW, btnH};
+        if (DrawUIButton(leftBtn, "<", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+            handScrollOffset -= (CARD_WIDTH + CARD_SPACING);
+            if (handScrollOffset < 0) handScrollOffset = 0;
+        }
+        if (DrawUIButton(rightBtn, ">", LIGHTGRAY, COLOR_TEXT_PRIMARY)) {
+            float maxScroll = (gameState->handCardCount - MAX_VISIBLE_CARDS_IN_HAND) * (CARD_WIDTH + CARD_SPACING);
+            handScrollOffset += (CARD_WIDTH + CARD_SPACING);
+            if (handScrollOffset > maxScroll) handScrollOffset = maxScroll;
+        }
+    }
 }
 
 void Client_UpdateAndDraw(GameState *gameState) {
@@ -861,16 +1001,15 @@ void Client_UpdateAndDraw(GameState *gameState) {
   } else if (currentClientScreen == CLIENT_SCREEN_TITLE) {
     if (IsKeyPressed(KEY_ENTER)) { currentClientScreen = CLIENT_SCREEN_GAMEPLAY; }
   } else if (currentClientScreen == CLIENT_SCREEN_SCENARIO_DETAILS) {
-    if (IsKeyPressed(KEY_ESCAPE)) {
+    if (IsKeyPressed(KEY_Q)) {
       currentClientScreen = CLIENT_SCREEN_GAMEPLAY;
-      TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Gameplay.");
+      TraceLog(LOG_INFO, "CLIENT: Closing Scenario Details view, returning to Gameplay (Q key).");
     }
   } else if (currentClientScreen == CLIENT_SCREEN_GAMEPLAY) {
     HandleGameplayInput(gameState);
   }
   BeginDrawing();
   ClearBackground(COLOR_BACKGROUND);
-
   if (currentClientScreen == CLIENT_SCREEN_LOADING) {
     DrawLoadingScreen();
   } else if (currentClientScreen == CLIENT_SCREEN_TITLE) {
@@ -884,13 +1023,13 @@ void Client_UpdateAndDraw(GameState *gameState) {
   } else if (currentClientScreen == CLIENT_SCREEN_GAMEPLAY) {
     if (gameState != NULL) {
       DrawGameplayScreen(gameState);
+      DrawTouchUIAndHandle(gameState);
     } else {
       DrawTextEx(clientFont, "Error: GameState is NULL", (Vector2){20, 20}, 20, 1, RED);
     }
   } else {
     DrawTextEx(clientFont, "UNKNOWN CLIENT SCREEN", (Vector2){20, 20}, 20, 1, RED);
   }
-
   DrawFPS(GetScreenWidth() - 100, UI_PADDING);
   EndDrawing();
 }

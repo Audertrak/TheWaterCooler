@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <title>enjenir</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        
+        #canvas {
+            width: 1280px;
+            height: 720px;
+            max-width: 100vw;
+            max-height: 100vh;
+            background-color: #111;
+            border: 1px solid #444;
+            object-fit: contain;
+        }
+        
+        /* For smaller screens, scale down proportionally while maintaining aspect ratio */
+        @media (max-width: 1280px), (max-height: 720px) {
+            #canvas {
+                width: auto;
+                height: auto;
+                max-width: 100vw;
+                max-height: 100vh;
+            }
+        }
+        
+        #output {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            right: 10px;
+            max-height: 100px;
+            background: rgba(0,0,0,0.8);
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            padding: 5px;
+            overflow-y: auto;
+            display: none; /* Hidden by default, can be shown for debugging */
+        }
+    </style>
+    
+    <script type='text/javascript' src="https://cdn.jsdelivr.net/gh/eligrey/FileSaver.js/dist/FileSaver.min.js"></script>
+    <script type='text/javascript'>
+        function saveFileFromMEMFSToDisk(memoryFSname, localFSname) {
+            var data = FS.readFile(memoryFSname);
+            var blob = new Blob([data.buffer], { type: "application/octet-binary" });
+            saveAs(blob, localFSname);
+        }
+    </script>
+  </head>
+  
+  <body>
+    <canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="output"></div>
+    
+    <script>
+        // Set up the canvas with exact dimensions
+        function setupCanvas() {
+            var canvas = document.getElementById('canvas');
+            // Set the internal canvas resolution to match our game's native resolution
+            canvas.width = 1280;
+            canvas.height = 720;
+        }
+        
+        // Initialize canvas on load
+        window.addEventListener('DOMContentLoaded', setupCanvas);
+        
+        var Module = {
+            print: (function() {
+                var element = document.getElementById('output');
+                if (element) element.textContent = ''; // clear browser cache
+                return function(text) {
+                    if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                    console.log(text);
+                    if (element) {
+                        element.textContent += text + "\n";
+                        element.scrollTop = element.scrollHeight;
+                    }
+                };
+            })(),
+            printErr: function(text) {
+                if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
+                console.error(text);
+            },
+            canvas: (function() {
+                return document.getElementById('canvas');
+            })(),
+            setStatus: function(text) {
+                console.log("Status: " + text);
+            },
+            totalDependencies: 0,
+            monitorRunDependencies: function(left) {
+                this.totalDependencies = Math.max(this.totalDependencies, left);
+                Module.setStatus(left ? 'Preparing... (' + (this.totalDependencies-left) + '/' + this.totalDependencies + ')' : 'All downloads complete.');
+            }
+        };
+        
+        // Error handling
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Error: ' + msg + '\nURL: ' + url + '\nLine: ' + lineNo + '\nColumn: ' + columnNo + '\nError object: ' + JSON.stringify(error));
+            return false;
+        };
+    </script>
+    {{{ SCRIPT }}}
+  </body>
+</html>

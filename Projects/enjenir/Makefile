@@ -79,9 +79,10 @@ EMCC_CFLAGS = -std=gnu11 -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 \
               -s USE_GLFW=3 \
               -s ASYNCIFY \
               -s TOTAL_MEMORY=67108864 \
+              -s ALLOW_MEMORY_GROWTH=1 \
               -nostdinc \
               -isystem $(EMSDK)/upstream/emscripten/cache/sysroot/include \
-              -isystem $(EMSDK)/upstream/emscripten/system/include 
+              -isystem $(EMSDK)/upstream/emscripten/system/include
 
 # Linker flags for Native
 SYSTEM_LDFLAGS_NATIVE_RELEASE = -lopengl32 -lgdi32 -lwinmm -lkernel32 -luser32 -lshell32 -ladvapi32 -lole32 \
@@ -90,11 +91,13 @@ SYSTEM_LDFLAGS_NATIVE_DEBUG = -lopengl32 -lgdi32 -lwinmm -lkernel32 -luser32 -ls
                               -Wl,/subsystem:console
 
 # Emscripten Linker flags
-EMCC_LDFLAGS = --shell-file web/customshell.html \
+EMCC_LDFLAGS = --shell-file web/minshell.html \
                --preload-file $(ASSETS_DIR)@/ \
                -s EXPORTED_FUNCTIONS="['_main','_malloc','_free']" \
                -s EXPORTED_RUNTIME_METHODS="['ccall','cwrap']" \
-               -s ENVIRONMENT="web,worker" 
+               -s ENVIRONMENT="web,worker" \
+               -s FORCE_FILESYSTEM=1 \
+               -s DISABLE_EXCEPTION_CATCHING=1
 
 RELEASE_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -O3 -flto -DNDEBUG
 DEBUG_CFLAGS_NATIVE = $(COMMON_CFLAGS_NATIVE) -g -DDEBUG
