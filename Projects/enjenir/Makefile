@@ -21,11 +21,20 @@ WEB_APP_HTML_FILE = $(WEB_APP_BUILD_DIR)/index.html
 ASSETS_DIR = assets
 TARGET_ASSETS_NATIVE_DIR = $(NATIVE_BUILD_DIR)/$(ASSETS_DIR)
 
-# Raylib paths
-RAYLIB_BASE_DIR = lib/raylib
-RAYLIB_SRC_DIR = $(RAYLIB_BASE_DIR)/src
-RAYLIB_INCLUDE_DIR = $(RAYLIB_SRC_DIR) 
-RAYLIB_NATIVE_LIB_FILE = $(RAYLIB_SRC_DIR)/libraylib.a 
+# Raylib paths (platform-specific)
+RAYLIB_WIN64_DIR = lib/raylib-5.5_win64_mingw-w64
+RAYLIB_LINUX_DIR = lib/raylib-5.5_linux_amd64
+RAYLIB_WEB_DIR = lib/raylib-5.5_webassembly
+
+# Platform-specific Raylib include and lib
+RAYLIB_INCLUDE_DIR_NATIVE = $(RAYLIB_WIN64_DIR)/include
+RAYLIB_LIB_FILE_NATIVE = $(RAYLIB_WIN64_DIR)/lib/libraylib.a
+
+RAYLIB_INCLUDE_DIR_LINUX = $(RAYLIB_LINUX_DIR)/include
+RAYLIB_LIB_FILE_LINUX = $(RAYLIB_LINUX_DIR)/lib/libraylib.a
+
+RAYLIB_INCLUDE_DIR_WEB = $(RAYLIB_WEB_DIR)/include
+RAYLIB_LIB_FILE_WEB = $(RAYLIB_WEB_DIR)/lib/libraylib.a
 
 # Compilers
 ZIG_CC = zig cc
@@ -55,7 +64,7 @@ RAYLIB_WEB_SRCS = \
     $(RAYLIB_SRC_DIR)/raudio.c 
 
 # CFLAGS
-COMMON_CFLAGS_NATIVE = -std=c11 -DPLATFORM_DESKTOP -DNOGDI -Isrc -I$(RAYLIB_INCLUDE_DIR)
+COMMON_CFLAGS_NATIVE = -std=c11 -DPLATFORM_DESKTOP -DNOGDI -Isrc -I$(RAYLIB_INCLUDE_DIR_NATIVE)
 COMMON_CFLAGS_WASM_LOGIC = -std=c11 -DTOOL_WASM_BUILD -Isrc -O2 \
                            --export=Server_Init --export=Server_Update \
                            --export=Server_PlayCardFromHand --export=Server_InteractWithComponent \
@@ -64,8 +73,8 @@ COMMON_CFLAGS_WASM_LOGIC = -std=c11 -DTOOL_WASM_BUILD -Isrc -O2 \
 
 EMCC_CFLAGS = -std=gnu11 -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2 \
               -Isrc \
-              -I$(RAYLIB_INCLUDE_DIR) \
-              -I$(RAYLIB_SRC_DIR)/external/glfw/include \
+              -I$(RAYLIB_INCLUDE_DIR_WEB) \
+              -I$(RAYLIB_WEB_DIR)/external/glfw/include \
               -Os -Wall \
               -s USE_GLFW=3 \
               -s ASYNCIFY \
@@ -117,22 +126,22 @@ $(NATIVE_BUILD_DIR)/debug/%.o: src/%.c | $(NATIVE_BUILD_DIR)/debug
 	@echo "Compiling Native (Debug): $< -> $@"
 	$(NATIVE_CC) $(DEBUG_CFLAGS_NATIVE) -c $< -o $@
 
-$(RELEASE_EXE): $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_NATIVE_LIB_FILE)
+$(RELEASE_EXE): $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_LIB_FILE_NATIVE)
 	@echo "Linking Native (Release): $@"
-	$(NATIVE_CC) $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE_RELEASE) -o $@
+	$(NATIVE_CC) $(APP_OBJS_NATIVE_RELEASE) $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_RELEASE) -o $@
 
-$(DEBUG_EXE): $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_NATIVE_LIB_FILE)
+$(DEBUG_EXE): $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_LIB_FILE_NATIVE)
 	@echo "Linking Native (Debug): $@"
-	$(NATIVE_CC) $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_NATIVE_LIB_FILE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
+	$(NATIVE_CC) $(APP_OBJS_NATIVE_DEBUG) $(RAYLIB_LIB_FILE_NATIVE) $(SYSTEM_LDFLAGS_NATIVE_DEBUG) -o $@
 
 wasm_logic: $(WASM_SERVER_LOGIC_OUTPUT)
 $(WASM_SERVER_LOGIC_OUTPUT): $(APP_C_FILES_WASM_LOGIC) | $(WASM_LOGIC_BUILD_DIR)
 	@echo "Compiling Server Logic to WASM: $(APP_C_FILES_WASM_LOGIC) -> $@"
 	$(WASM_LOGIC_CC) $(COMMON_CFLAGS_WASM_LOGIC) $(APP_C_FILES_WASM_LOGIC) -o $@
 
-$(WEB_APP_HTML_FILE): $(APP_C_FILES_WEB) $(RAYLIB_WEB_SRCS) | $(WEB_APP_BUILD_DIR)
+$(WEB_APP_HTML_FILE): $(APP_C_FILES_WEB) | $(WEB_APP_BUILD_DIR)
 	@echo "Compiling Full Application for Web to $(WEB_APP_HTML_FILE)..."
-	$(EMCC) $(EMCC_CFLAGS) $(APP_C_FILES_WEB) $(RAYLIB_WEB_SRCS) $(EMCC_LDFLAGS) -o $(WEB_APP_HTML_FILE)
+	$(EMCC) $(EMCC_CFLAGS) $(APP_C_FILES_WEB) $(RAYLIB_LIB_FILE_WEB) $(EMCC_LDFLAGS) -o $(WEB_APP_HTML_FILE)
 
 copy-assets-native: $(ASSETS_DIR) | $(NATIVE_BUILD_DIR)
 	@echo "Copying assets to $(TARGET_ASSETS_NATIVE_DIR)..."

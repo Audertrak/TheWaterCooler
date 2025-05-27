@@ -1,0 +1,61 @@
+# Set environment variables for reproducible, headless build (Scoop paths)
+ANDROID_HOME := C:/Users/Tim/scoop/apps/android-clt/current
+# Hardcode your NDK version for Windows compatibility
+ANDROID_NDK := C:/Users/Tim/scoop/apps/android-clt/current/ndk/25.2.9519653
+JAVA_HOME := C:/Users/Tim/scoop/apps/openjdk/current
+PATH := $(JAVA_HOME)/bin;$(ANDROID_HOME)/platform-tools;$(ANDROID_HOME)/build-tools/34.0.0;$(PATH)
+
+# Project settings
+PROJECT_NAME := enjenir
+BUILD_DIR := build
+ASSETS_DIR := assets
+RAYLIB_INCLUDE_DIR := lib/raylib/include
+RAYLIB_NATIVE_LIB_FILE := lib/raylib/lib/libraylib.a
+
+ANDROID_BUILD_DIR := $(BUILD_DIR)/android
+ANDROID_EXE := $(ANDROID_BUILD_DIR)/$(PROJECT_NAME)
+APK_NAME := $(BUILD_DIR)/$(PROJECT_NAME).apk
+
+# Android toolchain
+TARGET_ABI := arm64-v8a
+API_LEVEL := 24
+ANDROID_CC := $(ANDROID_NDK)/toolchains/llvm/prebuilt/windows-x86_64/bin/aarch64-linux-android$(API_LEVEL)-clang
+ANDROID_CFLAGS := -std=c11 -DPLATFORM_ANDROID -Isrc -I$(RAYLIB_INCLUDE_DIR)
+ANDROID_LDFLAGS := -landroid -llog -lEGL -lGLESv2 -lz -lm -fPIE -pie
+
+APP_C_FILES_ANDROID := src/main.c src/client.c src/server.c
+APP_OBJS_ANDROID := $(patsubst src/%.c,$(ANDROID_BUILD_DIR)/%.o,$(APP_C_FILES_ANDROID))
+
+$(ANDROID_BUILD_DIR):
+	@mkdir -p $(ANDROID_BUILD_DIR)
+
+$(ANDROID_BUILD_DIR)/%.o: src/%.c | $(ANDROID_BUILD_DIR)
+	@echo "Compiling Android: $< -> $@"
+	$(ANDROID_CC) $(ANDROID_CFLAGS) -c $< -o $@
+
+$(ANDROID_EXE): $(APP_OBJS_ANDROID) $(RAYLIB_NATIVE_LIB_FILE)
+	@echo "Linking Android: $@"
+	$(ANDROID_CC) $(APP_OBJS_ANDROID) $(RAYLIB_NATIVE_LIB_FILE) $(ANDROID_LDFLAGS) -o $@
+
+android: $(APK_NAME)
+
+$(APK_NAME): $(ANDROID_EXE) copy-assets-android | $(BUILD_DIR)
+	@echo "Packaging APK: $@"
+	$(ANDROID_HOME)/build-tools/34.0.0/aapt package -f -M AndroidManifest.xml -S res -A $(ANDROID_BUILD_DIR)/$(ASSETS_DIR) -I $(ANDROID_HOME)/platforms/android-$(API_LEVEL)/android.jar -F $(BUILD_DIR)/$(PROJECT_NAME).unaligned.apk $(ANDROID_BUILD_DIR)
+	$(ANDROID_HOME)/build-tools/34.0.0/zipalign -f 4 $(BUILD_DIR)/$(PROJECT_NAME).unaligned.apk $@
+	$(ANDROID_HOME)/build-tools/34.0.0/apksigner sign --ks debug.keystore --ks-pass pass:android --key-pass pass:android --out $@ $@
+
+copy-assets-android: $(ASSETS_DIR) | $(ANDROID_BUILD_DIR)
+	@echo "Copying assets to $(ANDROID_BUILD_DIR)/$(ASSETS_DIR)..."
+	rm -rf $(ANDROID_BUILD_DIR)/$(ASSETS_DIR)
+	mkdir -p $(ANDROID_BUILD_DIR)/$(ASSETS_DIR)
+	cp -rv $(ASSETS_DIR)/. $(ANDROID_BUILD_DIR)/$(ASSETS_DIR)/
+
+# Ensure build dir exists
+$(BUILD_DIR):
+	@mkdir -p $(BUILD_DIR)
+
+clean:
+	rm -rf $(BUILD_DIR)
+
+.PHONY: android copy-assets-android clean

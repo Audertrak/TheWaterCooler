@@ -1,0 +1,53 @@
+{
+  "executables": [
+    "aarch64-linux-android28-clang",
+    "llvm-ar",
+    "aapt2",
+    "aapt",
+    "zipalign",
+    "apksigner",
+    "keytool",
+    "cp",
+    "mkdir",
+    "rm"
+  ],
+  "libraries": [
+    "lib/raylib/lib/android/arm64-v8a/libraylib.a",
+    "build/android/lib/arm64-v8a/libenjenir.so"
+  ],
+  "source_files": [
+    "src/main.c",
+    "src/client.c",
+    "src/server.c",
+    "lib/raylib/src/rcore.c",
+    "lib/raylib/src/rshapes.c",
+    "lib/raylib/src/rtextures.c",
+    "lib/raylib/src/rtext.c",
+    "lib/raylib/src/rmodels.c",
+    "lib/raylib/src/utils.c",
+    "lib/raylib/src/raudio.c",
+    "lib/raylib/projects/VS2019-Android/raylib_android/raylib_android.NativeActivity/android_native_app_glue.h",
+    "lib/raylib/projects/VS2019-Android/raylib_android/raylib_android.NativeActivity/android_native_app_glue.c"
+  ],
+  "environment_variables": [
+    "ANDROID_HOME",
+    "ANDROID_NDK_VERSION",
+    "ANDROID_NDK",
+    "JAVA_HOME",
+    "ANDROID_SDK_BUILD_TOOLS_VERSION",
+    "PATH"
+  ],
+  "environment_info": {
+    "TARGET_ABI": "arm64-v8a",
+    "API_LEVEL": 28,
+    "ANDROID_SYSROOT": "C:/Users/Tim/scoop/apps/android-clt/current/ndk/25.2.9519653/toolchains/llvm/prebuilt/windows-x86_64/sysroot",
+    "ANDROID_BUILD_DIR": "build/android",
+    "ANDROID_NATIVE_LIB_DIR": "build/android/lib/arm64-v8a",
+    "ANDROID_EXE_NAME": "libenjenir.so",
+    "ANDROID_EXE": "build/android/lib/arm64-v8a/libenjenir.so",
+    "APK_NAME": "build/enjenir.apk",
+    "ANDROID_ASSETS_DIR": "build/android/assets",
+    "ANDROID_MANIFEST": "AndroidManifest.xml",
+    "ANDROID_RES_DIR": "res"
+  }
+}

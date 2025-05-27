@@ -1,0 +1,72 @@
+{
+  "executables": {
+    "aarch64-linux-android28-clang": null,
+    "llvm-ar": "C:\\Users\\Tim\\scoop\\apps\\llvm\\current\\bin\\llvm-ar.EXE",
+    "aapt2": null,
+    "aapt": null,
+    "zipalign": null,
+    "apksigner": null,
+    "keytool": "C:\\Users\\Tim\\scoop\\apps\\openjdk\\current\\bin\\keytool.EXE",
+    "cp": "C:\\Users\\Tim\\scoop\\shims\\cp.EXE",
+    "mkdir": "C:\\Users\\Tim\\scoop\\shims\\mkdir.EXE",
+    "rm": "C:\\Users\\Tim\\scoop\\shims\\rm.EXE"
+  },
+  "libraries": {
+    "lib/raylib/lib/android/arm64-v8a/libraylib.a": true,
+    "build/android/lib/arm64-v8a/libenjenir.so": false
+  },
+  "source_files": {
+    "src/main.c": true,
+    "src/client.c": true,
+    "src/server.c": true,
+    "lib/raylib/src/rcore.c": true,
+    "lib/raylib/src/rshapes.c": true,
+    "lib/raylib/src/rtextures.c": true,
+    "lib/raylib/src/rtext.c": true,
+    "lib/raylib/src/rmodels.c": true,
+    "lib/raylib/src/utils.c": true,
+    "lib/raylib/src/raudio.c": true,
+    "lib/raylib/projects/VS2019-Android/raylib_android/raylib_android.NativeActivity/android_native_app_glue.h": true,
+    "lib/raylib/projects/VS2019-Android/raylib_android/raylib_android.NativeActivity/android_native_app_glue.c": true
+  },
+  "env_vars": {
+    "ANDROID_HOME": "C:\\Users\\Tim\\scoop\\apps\\android-clt\\current",
+    "ANDROID_NDK_VERSION": null,
+    "ANDROID_NDK": null,
+    "JAVA_HOME": "C:\\Users\\Tim\\scoop\\apps\\openjdk\\current",
+    "ANDROID_SDK_BUILD_TOOLS_VERSION": null,
+    "PATH": "C:\\Program Files\\PowerShell\\7-preview;C:\\Users\\Tim\\scoop\\apps\\emscripten\\4.0.9;C:\\Users\\Tim\\scoop\\apps\\emscripten\\4.0.9\\upstream\\emscripten;C:\\Users\\Tim\\scoop\\apps\\emscripten\\4.0.7;C:\\Users\\Tim\\scoop\\apps\\emscripten\\4.0.7\\upstream\\emscripten;C:\\WINDOWS\\system32;C:\\WINDOWS;C:\\WINDOWS\\System32\\Wbem;C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\;C:\\WINDOWS\\System32\\OpenSSH\\;C:\\Program Files\\dotnet\\;C:\\Program Files\\Git\\cmd;C:\\.bin\\rebar3;C:\\Users\\Tim\\scoop\\apps;C:\\Users\\Tim\\scoop\\shims;C:\\.bin;C:\\.lib;C:\\Users\\Tim\\scoop\\apps\\llvm\\current\\bin;C:\\Program Files\\Microsoft SQL Server\\Client SDK\\ODBC\\170\\Tools\\Binn\\;C:\\Program Files\\Microsoft SQL Server\\150\\Tools\\Binn\\;C:\\Program Files\\Tailscale\\;C:\\Program Files\\PowerShell\\7-preview\\preview;C:\\Users\\Tim\\scoop\\apps\\nodejs\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\nodejs\\current;C:\\Users\\Tim\\scoop\\apps\\emscripten\\current;C:\\Users\\Tim\\scoop\\apps\\vscode\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\kotlin-native\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\rustup\\current\\.cargo\\bin;c:\\Users\\Tim\\go\\bin;C:\\Users\\Tim\\scoop\\apps\\miniconda3\\current\\scripts;C:\\Users\\Tim\\scoop\\apps\\miniconda3\\current\\Library\\bin;C:\\Users\\Tim\\scoop\\apps\\mingw\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\openjdk\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\python\\current\\Scripts;C:\\Users\\Tim\\scoop\\apps\\python\\current;C:\\Users\\Tim\\scoop\\apps\\gcc\\current\\bin;C:\\Users\\Tim\\scoop\\apps\\luarocks\\current\\rocks\\bin;C:\\Users\\Tim\\AppData\\Local\\Programs\\DKMLNA~1\\usr\\bin;C:\\Users\\Tim\\AppData\\Local\\Programs\\DKMLNA~1\\bin;C:\\Users\\Tim\\AppData\\Local\\Microsoft\\WindowsApps;C:\\Users\\Tim\\AppData\\Local\\Microsoft\\WinGet\\Links;C:\\Users\\Tim\\AppData\\Local\\Microsoft\\WindowsApps;C:\\.lib\\clay;C:\\Users\\Tim\\scoop\\apps\\raylib\\current\\raylib-5.5_win64_msvc16\\include;C:\\Users\\Tim\\.dotnet\\tools;C:\\Users\\Tim\\.cargo\\bin;C:\\Users\\Tim\\scoop\\apps\\raylib\\current\\;C:\\Users\\Tim\\scoop\\apps\\llvm\\current\\bin;c:\\Users\\Tim\\scoop\\apps\\vscode\\1.100.2\\data\\user-data\\User\\globalStorage\\github.copilot-chat\\debugCommand"
+  },
+  "environment_info": {
+    "TARGET_ABI": "arm64-v8a",
+    "API_LEVEL": 28,
+    "ANDROID_SYSROOT": "C:/Users/Tim/scoop/apps/android-clt/current/ndk/25.2.9519653/toolchains/llvm/prebuilt/windows-x86_64/sysroot",
+    "ANDROID_BUILD_DIR": "build/android",
+    "ANDROID_NATIVE_LIB_DIR": "build/android/lib/arm64-v8a",
+    "ANDROID_EXE_NAME": "libenjenir.so",
+    "ANDROID_EXE": "build/android/lib/arm64-v8a/libenjenir.so",
+    "APK_NAME": "build/enjenir.apk",
+    "ANDROID_ASSETS_DIR": "build/android/assets",
+    "ANDROID_MANIFEST": "AndroidManifest.xml",
+    "ANDROID_RES_DIR": "res"
+  },
+  "missing": {
+    "executables": [
+      "aarch64-linux-android28-clang",
+      "aapt2",
+      "aapt",
+      "zipalign",
+      "apksigner"
+    ],
+    "libraries": [
+      "build/android/lib/arm64-v8a/libenjenir.so"
+    ],
+    "source_files": [],
+    "env_vars": [
+      "ANDROID_NDK_VERSION",
+      "ANDROID_NDK",
+      "ANDROID_SDK_BUILD_TOOLS_VERSION"
+    ]
+  },
+  "health": "FAIL"
+}
